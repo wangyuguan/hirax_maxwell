@@ -6,4 +6,5 @@
 fort.*
 *.mat
 *.pdf
-data/
+!data/
+!data/*.mat
