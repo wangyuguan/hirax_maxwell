@@ -1,3 +1,4 @@
+# Never track or update macOS Finder metadata.
 .DS_Store
 *.asv
 *.fig
