@@ -8,7 +8,7 @@ addpath('src')
 
 dish_radius = 69.25;
 thickness = 0.01*dish_radius;
-surface_orders = [4 6 8 10 12 14];
+surface_orders = [6 8 10];
 
 chunkie_order = 20;
 chunkie_n0 = 3;

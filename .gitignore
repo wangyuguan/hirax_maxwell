@@ -3,6 +3,7 @@
 *.asv
 *.fig
 *.log
+fort.*
 *.mat
 *.pdf
 data/
