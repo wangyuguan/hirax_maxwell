@@ -1,14 +1,3 @@
-%TEST_MAXWELL_SPHERE Analytic sphere tests for every MATLAB Maxwell solver.
-%
-% The MATLAB interface currently implements two Maxwell solvers:
-%   1. PEC scattering with the NRCCIE representation.
-%   2. Dielectric transmission with the Muller representation.
-%
-% This script tests both solvers with deterministic point-source solutions.
-% It also tests close-to-surface NRCCIE postprocessing and directly checks
-% every component of the common near-field evaluator, including the H_z
-% curl term whose source-density index was previously incorrect. No
-% reference data are read or written.
 
 clear
 clc
@@ -22,7 +11,7 @@ run(fullfile(fmm3dbie_directory,'startup.m'))
 sphere_radius = 1;
 number_of_cube_subdivisions = 2;
 surface_order = 12;
-patch_type = 1;                 % triangular Vioreanu-Rokhlin nodes
+patch_type = 1;
 quadrature_tolerance = 1e-10;
 gmres_tolerance = 1e-11;
 required_solver_error = 1e-7;
@@ -36,12 +25,7 @@ fprintf('  patches: %d, points: %d, order: %d\n', ...
     S.npatches,S.npts,surface_order)
 
 %% PEC NRCCIE solver and near-corrected postprocessing
-%
-% A radiating point source outside the unit sphere supplies the incident
-% field. Uniqueness and the PEC boundary condition imply that the analytic
-% continuation of the total field into the sphere is zero. Therefore the
-% exact scattered field at every interior target is minus the incident
-% point-source field.
+
 
 zk = 1.1;
 alpha = 1;
