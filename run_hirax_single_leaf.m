@@ -39,7 +39,6 @@ test_targets = dish_radius*[ ...
      0.0,  0.0,  0.0,  2.0,  0.7, -1.3; ...
      2.0, -2.0,  0.4, -0.3,  0.8, -1.1];
 
-data_file = 'run_hirax_single_leaf_data.mat';
 log_file = 'run_hirax_single_leaf.log';
 level_directory = 'data';
 
@@ -89,7 +88,6 @@ target_info.r = test_targets;
 
 settings = struct();
 settings.thickness = thickness;
-settings.surface_orders = surface_orders;
 settings.chunkie_order = chunkie_order;
 settings.chunkie_n0 = chunkie_n0;
 settings.chunkie_nchs = chunkie_nchs;
@@ -118,7 +116,6 @@ settings.einc_probe = einc_probe;
 settings.hinc_probe = hinc_probe;
 
 number_of_orders = numel(surface_orders);
-levels = cell(number_of_orders,1);
 
 fprintf('HIRAX Chunkie dish close-source NRCCIE raw-data run\n')
 fprintf('surface orders %s, thickness %.8g\n', ...
@@ -143,7 +140,7 @@ for order_id = 1:number_of_orders
     level_file = sprintf('%s/run_hirax_single_leaf_order%d.mat', ...
         level_directory,surface_order);
 
-    case_settings = rmfield(settings,'surface_orders');
+    case_settings = settings;
     case_settings.surface_order = surface_order;
 
     fprintf('\n========== surface order %d ==========%s', ...
@@ -301,11 +298,8 @@ for order_id = 1:number_of_orders
         level.hscat = hscat;
         level.etotal = einc_probe+escat;
         level.htotal = hinc_probe+hscat;
-        levels{order_id} = level;
-
         save(level_file,'case_settings','level','S','densities', ...
             'einc','hinc','-v7.3')
-        save(data_file,'settings','levels','-v7.3')
 
         fprintf(['order %d saved: status %s, %d patches, %d nodes\n' ...
             'GMRES %d iterations, residual %.3e, solve %.1f s\n' ...
@@ -323,17 +317,12 @@ for order_id = 1:number_of_orders
         level.error_message = run_error.message;
         level.error_report = getReport(run_error,'extended', ...
             'hyperlinks','off');
-        levels{order_id} = level;
         save(level_file,'case_settings','level','-v7.3')
-        save(data_file,'settings','levels','-v7.3')
         fprintf(2,'order %d failed; diagnostic saved in %s\n%s\n', ...
             surface_order,level_file,level.error_report)
         rethrow(run_error)
     end
 end
-
-save(data_file,'settings','levels','-v7.3')
-fprintf('\nClose-source raw-data run finished. Saved %s\n',data_file)
 
 
 function point = rightmost_outline_point(parts,points_per_panel)
