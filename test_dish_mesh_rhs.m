@@ -9,7 +9,7 @@ addpath('src')
 
 dish_radius = 69.25;
 thickness = 0.01*dish_radius;
-surface_order = 8;
+surface_order = 16;
 wall_display_scale = 30;
 
 wavelength = 10*dish_radius;
@@ -30,7 +30,7 @@ cap_mesh_spacing_center = 0.2*dish_radius;
 cap_mesh_spacing_side = cap_mesh_spacing_center;
 cap_mesh_side_start = 0.62;
 outline_refinement = 1;
-wall_profile_refinement = 2;
+wall_profile_refinement = 3;
 
 geometry_options = struct();
 geometry_options.norder = surface_order;

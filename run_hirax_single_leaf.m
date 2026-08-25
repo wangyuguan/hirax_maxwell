@@ -8,7 +8,7 @@ addpath('src')
 
 dish_radius = 69.25;
 thickness = 0.01*dish_radius;
-surface_orders = [6 8 10];
+surface_orders = [6 8 10 12 14 16];
 
 chunkie_order = 20;
 chunkie_n0 = 3;
@@ -20,7 +20,7 @@ cap_mesh_spacing_center = 0.2*dish_radius;
 cap_mesh_spacing_side = cap_mesh_spacing_center;
 cap_mesh_side_start = 0.62;
 outline_refinement = 1;
-wall_profile_refinement = 2;
+wall_profile_refinement = 3;
 
 wavelength = 10*dish_radius;
 zk = 2*pi/wavelength;
