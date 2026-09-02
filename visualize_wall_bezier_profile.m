@@ -4,10 +4,10 @@ clear
 close all
 clc
 
-% Physical dimensions used by the HIRAX dish.
-dish_radius = 69.25;
-thickness = 0.01*dish_radius;
-rim_width = 0.028128271246*dish_radius;
+% Physical dimensions used by the HIRAX leaf.
+leaf_radius = 69.25;
+thickness = 0.01*leaf_radius;
+rim_width = 0.028128271246*leaf_radius;
 number_of_samples = 401;
 
 % Quintic Bezier control points for the upper wall profile.

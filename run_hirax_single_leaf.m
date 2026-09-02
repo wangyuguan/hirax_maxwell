@@ -6,25 +6,25 @@ run('../fmm3dbie-hirax-dev/matlab/startup.m')
 run('../chunkie/startup.m')
 addpath('src')
 
-dish_radius = 69.25;
-thickness = 0.01*dish_radius;
+leaf_radius = 69.25;
+thickness = 0.01*leaf_radius;
 surface_orders = [6 8 10 12 14 16];
 
 chunkie_order = 20;
 chunkie_n0 = 3;
 chunkie_nchs = 3;
 chunkie_newton_iterations = 30;
-rim_width = 0.028128271246*dish_radius;
+rim_width = 0.028128271246*leaf_radius;
 cap_collar_width = rim_width;
-cap_mesh_spacing_center = 0.2*dish_radius;
+cap_mesh_spacing_center = 0.2*leaf_radius;
 cap_mesh_spacing_side = cap_mesh_spacing_center;
 cap_mesh_side_start = 0.62;
 outline_refinement = 1;
 wall_profile_refinement = 3;
 
-wavelength = 10*dish_radius;
+wavelength = 10*leaf_radius;
 zk = 2*pi/wavelength;
-source_gap = dish_radius/30;
+source_gap = leaf_radius/30;
 source_height = 0;
 outline_samples_per_panel = 2001;
 
@@ -33,8 +33,8 @@ eps_quad = 1e-7;
 eps_gmres = 1e-8;
 maxit = 300;
 
-p0 = dish_radius^3*[1;1i;0];
-test_targets = dish_radius*[ ...
+p0 = leaf_radius^3*[1;1i;0];
+test_targets = leaf_radius*[ ...
      0.0,  0.0,  2.0,  0.0, -1.6,  1.2; ...
      0.0,  0.0,  0.0,  2.0,  0.7, -1.3; ...
      2.0, -2.0,  0.4, -0.3,  0.8, -1.1];
@@ -70,7 +70,7 @@ reference_options.wall_profile_refinement = wall_profile_refinement;
 
 reference_timer = tic;
 [reference_surface,reference_parts] = ...
-    hirax_chunkie_dish_plate_surfer(thickness,reference_options);
+    hirax_chunkie_leaf_plate_surfer(thickness,reference_options);
 reference_geometry_time = toc(reference_timer);
 source_anchor = rightmost_outline_point( ...
     reference_parts,outline_samples_per_panel);
@@ -99,7 +99,7 @@ settings.cap_mesh_spacing_side = cap_mesh_spacing_side;
 settings.cap_mesh_side_start = cap_mesh_side_start;
 settings.outline_refinement = outline_refinement;
 settings.wall_profile_refinement = wall_profile_refinement;
-settings.dish_radius = dish_radius;
+settings.leaf_radius = leaf_radius;
 settings.wavelength = wavelength;
 settings.zk = zk;
 settings.source_gap = source_gap;
@@ -117,11 +117,11 @@ settings.hinc_probe = hinc_probe;
 
 number_of_orders = numel(surface_orders);
 
-fprintf('HIRAX Chunkie dish close-source NRCCIE raw-data run\n')
+fprintf('HIRAX Chunkie leaf close-source NRCCIE raw-data run\n')
 fprintf('surface orders %s, thickness %.8g\n', ...
     mat2str(surface_orders),thickness)
-fprintf(['dish radius %.8g, wavelength %.8g, R/lambda %.8g, ' ...
-    'zk %.8g\n'],dish_radius,wavelength,dish_radius/wavelength,zk)
+fprintf(['leaf radius %.8g, wavelength %.8g, R/lambda %.8g, ' ...
+    'zk %.8g\n'],leaf_radius,wavelength,leaf_radius/wavelength,zk)
 fprintf(['source anchor (%.12g, %.12g, %.12g), gap R/30 = %.12g\n' ...
     'source point  (%.12g, %.12g, %.12g)\n'], ...
     source_anchor,source_gap,x0)
@@ -172,7 +172,7 @@ for order_id = 1:number_of_orders
             clear reference_surface reference_parts
         else
             geometry_timer = tic;
-            [S,plate_parts] = hirax_chunkie_dish_plate_surfer( ...
+            [S,plate_parts] = hirax_chunkie_leaf_plate_surfer( ...
                 thickness,geometry_options);
             geometry_time = toc(geometry_timer);
         end

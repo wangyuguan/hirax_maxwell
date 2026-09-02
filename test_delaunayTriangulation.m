@@ -6,10 +6,10 @@ run('../fmm3dbie-hirax-dev/matlab/startup.m')
 run('../chunkie/startup.m')
 addpath('src')
 
-%% Current dish geometry
+%% Current leaf geometry
 
-dish_radius = 69.25;
-thickness = 0.01*dish_radius;
+leaf_radius = 69.25;
+thickness = 0.01*leaf_radius;
 surface_order = 4;
 
 chunkie_order = 20;
@@ -17,9 +17,9 @@ chunkie_n0 = 3;
 chunkie_nchs = 3;
 chunkie_newton_iterations = 30;
 
-rim_width = 0.028128271246*dish_radius;
+rim_width = 0.028128271246*leaf_radius;
 cap_collar_width = rim_width;
-cap_mesh_spacing_center = 0.2*dish_radius;
+cap_mesh_spacing_center = 0.2*leaf_radius;
 cap_mesh_spacing_side = cap_mesh_spacing_center;
 cap_mesh_side_start = 0.62;
 outline_refinement = 1;
@@ -43,7 +43,7 @@ geometry_options.outline_refinement = outline_refinement;
 geometry_options.wall_profile_refinement = ...
     wall_profile_refinement;
 
-[~,parts] = hirax_chunkie_dish_plate_surfer( ...
+[~,parts] = hirax_chunkie_leaf_plate_surfer( ...
     thickness,geometry_options);
 
 %% Input points and constrained boundary edges
