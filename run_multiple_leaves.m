@@ -1,4 +1,4 @@
-% Four identical leaves or unit spheres in a clover arrangement.
+% Run four identical leaves or unit spheres at several surface orders.
 
 clear
 close all
@@ -9,13 +9,21 @@ run('../chunkie/startup.m')
 addpath('../FMM3D/matlab')
 addpath('src')
 
+norders = [4,6,8,10,12];
+for norder = norders
+    run_one_order(norder)
+end
+
+
+function run_one_order(norder)
+
 %% Geometry choice
 
 use_sphere = false;
-if_solve = false;
+if_solve = true;
+if_symmtric = true;
 leaf_radius = 69.25;
 sphere_radius = 1;
-norder = 4;
 sphere_subdivisions = 4;
 sphere_iptype = 1;
 
@@ -64,8 +72,7 @@ alpha = 1;
 eps_quad = 1e-7;
 eps_fmm = 1e-7;
 eps_gmres = 1e-6;
-gmres_restart = 30;
-gmres_restart_cycles = 10;
+gmres_maxit = 1000;
 
 source_info = struct();
 source_info.r = [0;0;10*geometry_radius];
@@ -213,11 +220,20 @@ rhs = rhs_components(:);
 %% Self and cross-leaf quadrature corrections
 
 quadrature_timer = tic;
-Cslp = em3d.slp.get_quad_corr_mat(S,eps_quad,zk);
-[Cx,Cy,Cz] = em3d.sgrad.get_quad_corr_mat(S,eps_quad,zk);
+if if_symmtric
+    [Cslp,Cx,Cy,Cz,quadrature_symmetry] = ...
+        fourfold_quad_corr_mats(S1,S2,S3,S4,eps_quad,zk);
+    quadrature_method = 'one rotationally reused target block row';
+else
+    Cslp = em3d.slp.get_quad_corr_mat(S,eps_quad,zk);
+    [Cx,Cy,Cz] = em3d.sgrad.get_quad_corr_mat(S,eps_quad,zk);
+    quadrature_symmetry = [];
+    quadrature_method = 'original full-surface construction';
+end
 quadrature_time = toc(quadrature_timer);
 
 fprintf('  quadrature corrections: %.2f s\n',quadrature_time)
+fprintf('  correction method: %s\n',quadrature_method)
 fprintf('  correction nonzeros S / dx / dy / dz: %d / %d / %d / %d\n', ...
     nnz(Cslp),nnz(Cx),nnz(Cy),nnz(Cz))
 
@@ -238,7 +254,7 @@ fprintf(['  S correction blocks; rows are target surfaces and columns ' ...
     'are source surfaces:\n'])
 disp(slp_correction_blocks)
 
-%% Matrix-free NRCCIE solve with ordinary restarted GMRES
+%% Matrix-free NRCCIE solve with unrestarted GMRES
 
 operator = struct();
 operator.npts = S.npts;
@@ -260,15 +276,10 @@ matvec = @(density) apply_nrccie(density,operator);
 solve_timer = tic;
 [solution,gmres_flag,gmres_relative_residual,gmres_iterations, ...
     gmres_residual_history] = gmres( ...
-    matvec,rhs,gmres_restart,eps_gmres,gmres_restart_cycles);
+    matvec,rhs,[],eps_gmres,gmres_maxit);
 solve_time = toc(solve_timer);
 
-if gmres_iterations(1)==0
-    number_of_iterations = gmres_iterations(2);
-else
-    number_of_iterations = ...
-        (gmres_iterations(1)-1)*gmres_restart+gmres_iterations(2);
-end
+number_of_iterations = length(gmres_residual_history)-1;
 
 true_relative_residual = norm(matvec(solution)-rhs)/norm(rhs);
 
@@ -288,6 +299,7 @@ fprintf('  solve time: %.2f s\n',solve_time)
 settings = struct();
 settings.use_sphere = use_sphere;
 settings.if_solve = if_solve;
+settings.if_symmtric = if_symmtric;
 settings.geometry_name = geometry_name;
 settings.geometry_radius = geometry_radius;
 settings.leaf_radius = leaf_radius;
@@ -303,8 +315,7 @@ settings.alpha = alpha;
 settings.eps_quad = eps_quad;
 settings.eps_fmm = eps_fmm;
 settings.eps_gmres = eps_gmres;
-settings.gmres_restart = gmres_restart;
-settings.gmres_restart_cycles = gmres_restart_cycles;
+settings.gmres_maxit = gmres_maxit;
 settings.source_info = source_info;
 settings.rotations = cat(3,R1,R2,R3,R4);
 settings.shifts = [shift1,shift2,shift3,shift4];
@@ -321,6 +332,7 @@ solver_data.solve_time = solve_time;
 solver_data.correction_nonzeros = [ ...
     nnz(Cslp),nnz(Cx),nnz(Cy),nnz(Cz)];
 solver_data.slp_correction_blocks = slp_correction_blocks;
+solver_data.quadrature_symmetry = quadrature_symmetry;
 
 if ~isfolder('data')
     mkdir('data')
@@ -334,6 +346,8 @@ end
 save(output_file,'S','settings','solver_data','einc','hinc', ...
     'rhs_components','surface_current','surface_charge','-v7.3')
 fprintf('  saved %s\n',output_file)
+
+end
 
 end
 

@@ -8,7 +8,7 @@ addpath('src')
 
 leaf_radius = 69.25;
 thickness = 0.01*leaf_radius;
-surface_orders = [6 8 10 12 14 16];
+surface_orders = [4 6 8 10 12];
 
 chunkie_order = 20;
 chunkie_n0 = 3;
