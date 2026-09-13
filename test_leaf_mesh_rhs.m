@@ -9,17 +9,14 @@ addpath('src')
 
 leaf_radius = 69.25;
 thickness = 0.01*leaf_radius;
-surface_order = 16;
+surface_order = 12;
 wall_display_scale = 30;
 
-wavelength = 10*leaf_radius;
+wavelength = 2*leaf_radius;
 zk = 2*pi/wavelength;
 p0 = leaf_radius^3*[1;1i;0];
-source_gap = leaf_radius/30;
-source_height = 0;
-outline_samples_per_panel = 2001;
 
-chunkie_order = 10;
+chunkie_order = 20;
 chunkie_n0 = 3;
 chunkie_nchs = 3;
 chunkie_newton_iterations = 30;
@@ -50,21 +47,11 @@ geometry_options.wall_profile_refinement = wall_profile_refinement;
 [S,parts] = hirax_chunkie_leaf_plate_surfer( ...
     thickness,geometry_options);
 
-outline_parameter = linspace(0,1,outline_samples_per_panel);
-outline_polynomials = lege.pols( ...
-    2*outline_parameter-1,parts.chunkie_order-1);
-source_anchor = [-inf;NaN;0];
-for panel = 1:parts.number_of_outline_panels
-    outline_coefficients = ...
-        parts.outline_position_coefficients(:,:,panel);
-    outline_values = outline_coefficients*reshape( ...
-        outline_polynomials,parts.chunkie_order,[]);
-    [candidate_x,candidate_index] = max(outline_values(1,:));
-    if candidate_x>source_anchor(1)
-        source_anchor = [outline_values(:,candidate_index);0];
-    end
-end
-source_point = source_anchor+[source_gap;0;source_height];
+% Overhead dipole of run_multiple_leaves.m. The four-leaf right-hand side
+% is the incident field restricted to the surface and carries no
+% scattering, so every leaf sees this same data up to a scalar phase and a
+% single leaf answers the four-leaf question.
+source_point = [0;0;10*leaf_radius];
 
 %% Native normal electric field
 
@@ -100,13 +87,30 @@ difference_display_floor = min(positive_normalized_difference);
 log10_normalized_absolute_difference = log10(max( ...
     normalized_absolute_difference,difference_display_floor));
 
+%% Per-patch spectral tail of the same function
+
+% surf_fun_error returns the absolute infinity norm of the high-degree
+% coefficient tail on every patch, so the input is normalized by its
+% global maximum to make the result relative. A per-patch denominator
+% would blow up wherever the normal field passes through zero.
+normal_einc_scale = max(abs(normal_einc));
+patch_error = abs(surf_fun_error(S,normal_einc/normal_einc_scale)).';
+positive_patch_error = patch_error(patch_error>0);
+patch_error_display_floor = min(positive_patch_error);
+log10_patch_error = log10(max(patch_error,patch_error_display_floor));
+
 %% Display surfaces
 
 display_transform = diag([1 1 wall_display_scale]);
 S_display = affine_transf(S,display_transform);
 S_interpolation_display = affine_transf( ...
     S_interpolation,display_transform);
-source_point_display = display_transform*source_point;
+
+% The figures deliberately carry no source marker. The source sits at
+% z = 10*leaf_radius, which the thickness exaggeration pushes out to
+% z = 300*leaf_radius while the leaf spans a few tens of display units.
+% Marking it would stretch every axis tight z range by three orders of
+% magnitude and flatten the leaf to a line.
 
 %% Normal electric field
 
@@ -117,8 +121,6 @@ plot(S_interpolation_display,normal_einc_magnitude,'EdgeColor','none')
 hold(rhs_axes,'on')
 plot_surfer_patch_boundaries(rhs_axes,S_display,[0 0 0],0.35, ...
     1:S_display.npatches,[0;0;0],9);
-scatter3(rhs_axes,source_point_display(1),source_point_display(2), ...
-    source_point_display(3),48,'r','filled')
 hold(rhs_axes,'off')
 axis(rhs_axes,'tight')
 view(rhs_axes,35,32)
@@ -137,8 +139,6 @@ hold(interpolated_rhs_axes,'on')
 plot_surfer_patch_boundaries( ...
     interpolated_rhs_axes,S_display,[0 0 0],0.35, ...
     1:S_display.npatches,[0;0;0],9);
-scatter3(interpolated_rhs_axes,source_point_display(1), ...
-    source_point_display(2),source_point_display(3),48,'r','filled')
 hold(interpolated_rhs_axes,'off')
 axis(interpolated_rhs_axes,'tight')
 view(interpolated_rhs_axes,35,32)
@@ -162,8 +162,6 @@ hold(difference_axes,'on')
 plot_surfer_patch_boundaries( ...
     difference_axes,S_display,[0 0 0],0.35, ...
     1:S_display.npatches,[0;0;0],9);
-scatter3(difference_axes,source_point_display(1), ...
-    source_point_display(2),source_point_display(3),48,'r','filled')
 hold(difference_axes,'off')
 axis(difference_axes,'tight')
 view(difference_axes,35,32)
@@ -182,12 +180,46 @@ clf
 mesh_axes = axes;
 plot_surfer_patch_boundaries(mesh_axes,S_display,[0 0 0],0.55, ...
     1:S_display.npatches,[0;0;0],17);
-hold(mesh_axes,'on')
-scatter3(mesh_axes,source_point_display(1),source_point_display(2), ...
-    source_point_display(3),48,'r','filled')
-hold(mesh_axes,'off')
 axis(mesh_axes,'equal')
 axis(mesh_axes,'tight')
 view(mesh_axes,35,32)
 grid(mesh_axes,'off')
 box(mesh_axes,'on')
+
+%% Per-patch spectral tail
+
+figure(5)
+clf
+patch_error_axes = axes;
+plot(S_display,log10_patch_error,'EdgeColor','none')
+hold(patch_error_axes,'on')
+plot_surfer_patch_boundaries( ...
+    patch_error_axes,S_display,[0 0 0],0.35, ...
+    1:S_display.npatches,[0;0;0],9);
+hold(patch_error_axes,'off')
+axis(patch_error_axes,'tight')
+view(patch_error_axes,35,32)
+grid(patch_error_axes,'off')
+box(patch_error_axes,'on')
+clim(patch_error_axes, ...
+    [min(log10_patch_error) max(log10_patch_error)])
+colorbar(patch_error_axes)
+
+%% Summary
+
+weighted_l2_relative_difference = sqrt(sum( ...
+    absolute_difference.^2.*S_interpolation.wts(:).'))/sqrt(sum( ...
+    abs(normal_einc_exact).^2.*S_interpolation.wts(:).'));
+
+fprintf('HIRAX leaf right-hand-side resolution check\n')
+fprintf('  surface order: %d, interpolation order: %d\n', ...
+    surface_order,interpolation_order)
+fprintf('  patches: %d, nodes: %d, oversampled nodes: %d\n', ...
+    S.npatches,S.npts,S_interpolation.npts)
+fprintf('  source point: (%.8g, %.8g, %.8g)\n',source_point)
+fprintf('  nodal interpolation error, max / weighted L2: %.3e / %.3e\n', ...
+    max(normalized_absolute_difference),weighted_l2_relative_difference)
+fprintf('  per-patch tail, min / median / max: %.3e / %.3e / %.3e\n', ...
+    min(patch_error),median(patch_error),max(patch_error))
+fprintf('  patches with tail above 1e-8 / 1e-6: %d / %d\n', ...
+    sum(patch_error>1e-8),sum(patch_error>1e-6))

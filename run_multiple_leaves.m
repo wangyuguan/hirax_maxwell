@@ -9,7 +9,7 @@ run('../chunkie/startup.m')
 addpath('../FMM3D/matlab')
 addpath('src')
 
-norders = [4,6,8,10,12];
+norders = [4,6,8];
 for norder = norders
     run_one_order(norder)
 end
@@ -221,35 +221,63 @@ rhs = rhs_components(:);
 
 quadrature_timer = tic;
 if if_symmtric
-    [Cslp,Cx,Cy,Cz,quadrature_symmetry] = ...
+    [corrections,quadrature_symmetry] = ...
         fourfold_quad_corr_mats(S1,S2,S3,S4,eps_quad,zk);
     quadrature_method = 'one rotationally reused target block row';
+    apply_corrections = @(density) ...
+        fourfold_apply_quad_corr(corrections,density);
+
+    % The assembled matrices are block circulant, so only the single
+    % stored block row exists in memory. correction_nonzeros stays the
+    % assembled count so that it remains comparable with earlier runs.
+    base_nonzeros = quadrature_symmetry.base_block_nonzeros;
+    correction_nonzeros = 4*sum(base_nonzeros,1);
+    stored_nonzeros = sum(base_nonzeros,'all');
+
+    slp_correction_blocks = zeros(4,4);
+    for target_cycle = 1:4
+        for source_cycle = 1:4
+            relative_cycle = mod(source_cycle-target_cycle,4)+1;
+            slp_correction_blocks( ...
+                corrections.cycle_to_merge(target_cycle), ...
+                corrections.cycle_to_merge(source_cycle)) = ...
+                nnz(corrections.slp{relative_cycle});
+        end
+    end
 else
     Cslp = em3d.slp.get_quad_corr_mat(S,eps_quad,zk);
     [Cx,Cy,Cz] = em3d.sgrad.get_quad_corr_mat(S,eps_quad,zk);
     quadrature_symmetry = [];
     quadrature_method = 'original full-surface construction';
+    apply_corrections = @(density) ...
+        apply_full_quad_corr(density,Cslp,Cx,Cy,Cz);
+
+    correction_nonzeros = [nnz(Cslp),nnz(Cx),nnz(Cy),nnz(Cz)];
+    stored_nonzeros = sum(correction_nonzeros);
+
+    component_node_count = S0.npts;
+    slp_correction_blocks = zeros(4,4);
+    for target_component = 1:4
+        target_nodes = (target_component-1)*component_node_count+ ...
+            (1:component_node_count);
+        for source_component = 1:4
+            source_nodes = ...
+                (source_component-1)*component_node_count+ ...
+                (1:component_node_count);
+            slp_correction_blocks(target_component,source_component) = ...
+                nnz(Cslp(target_nodes,source_nodes));
+        end
+    end
 end
 quadrature_time = toc(quadrature_timer);
 
 fprintf('  quadrature corrections: %.2f s\n',quadrature_time)
 fprintf('  correction method: %s\n',quadrature_method)
 fprintf('  correction nonzeros S / dx / dy / dz: %d / %d / %d / %d\n', ...
-    nnz(Cslp),nnz(Cx),nnz(Cy),nnz(Cz))
-
-component_node_count = S0.npts;
-slp_correction_blocks = zeros(4,4);
-for target_component = 1:4
-    target_nodes = (target_component-1)*component_node_count+ ...
-        (1:component_node_count);
-    for source_component = 1:4
-        source_nodes = ...
-            (source_component-1)*component_node_count+ ...
-            (1:component_node_count);
-        slp_correction_blocks(target_component,source_component) = ...
-            nnz(Cslp(target_nodes,source_nodes));
-    end
-end
+    correction_nonzeros)
+fprintf('  stored / assembled nonzeros: %d / %d (%.2fx saving)\n', ...
+    stored_nonzeros,sum(correction_nonzeros), ...
+    sum(correction_nonzeros)/stored_nonzeros)
 fprintf(['  S correction blocks; rows are target surfaces and columns ' ...
     'are source surfaces:\n'])
 disp(slp_correction_blocks)
@@ -266,10 +294,7 @@ operator.rv = surface_rv;
 operator.zk = zk;
 operator.alpha = alpha;
 operator.eps_fmm = eps_fmm;
-operator.Cslp = Cslp;
-operator.Cx = Cx;
-operator.Cy = Cy;
-operator.Cz = Cz;
+operator.apply_corrections = apply_corrections;
 
 matvec = @(density) apply_nrccie(density,operator);
 
@@ -329,8 +354,8 @@ solver_data.true_relative_residual = true_relative_residual;
 solver_data.gmres_residual_history = gmres_residual_history;
 solver_data.quadrature_time = quadrature_time;
 solver_data.solve_time = solve_time;
-solver_data.correction_nonzeros = [ ...
-    nnz(Cslp),nnz(Cx),nnz(Cy),nnz(Cz)];
+solver_data.correction_nonzeros = correction_nonzeros;
+solver_data.stored_nonzeros = stored_nonzeros;
 solver_data.slp_correction_blocks = slp_correction_blocks;
 solver_data.quadrature_symmetry = quadrature_symmetry;
 
@@ -386,10 +411,9 @@ fmm_output = hfmm3d(operator.eps_fmm,operator.zk,source,2);
 potential = reshape(fmm_output.pot,4,npts);
 gradient = reshape(fmm_output.grad,4,3,npts);
 
-potential = potential+(operator.Cslp*density.').';
-gradient_x = (operator.Cx*density.').';
-gradient_y = (operator.Cy*density.').';
-gradient_z = (operator.Cz*density.').';
+[potential_correction,gradient_x,gradient_y,gradient_z] = ...
+    operator.apply_corrections(density);
+potential = potential+potential_correction;
 gradient(:,1,:) = gradient(:,1,:)+reshape(gradient_x,4,1,npts);
 gradient(:,2,:) = gradient(:,2,:)+reshape(gradient_y,4,1,npts);
 gradient(:,3,:) = gradient(:,3,:)+reshape(gradient_z,4,1,npts);
@@ -422,4 +446,14 @@ principal_value(3,:) = -normal_electric_field+operator.alpha*( ...
 
 y = 0.5*density_components+principal_value;
 y = y(:);
+end
+
+
+function [potential,gradient_x,gradient_y,gradient_z] = ...
+    apply_full_quad_corr(density,Cslp,Cx,Cy,Cz)
+
+potential = (Cslp*density.').';
+gradient_x = (Cx*density.').';
+gradient_y = (Cy*density.').';
+gradient_z = (Cz*density.').';
 end
