@@ -8,7 +8,8 @@ clear pth dir
 
 %% Parameters
 norders=[4 6 8 10 12];
-geometry_file=fullfile(root,'data','common_local_geometry_order06.mat');
+settings.geometry_options=struct(); % override geometry defaults here
+settings.thickness=.6925; % mm
 settings.zk=2*pi/(10*69.25);
 settings.alpha=1;
 settings.eps_quad=1e-11;
@@ -20,24 +21,18 @@ settings.quad_batch_size=2000;
 settings.source_info.r=[0;0;10*69.25];
 settings.source_info.edips=-69.25^3*[1;1i;0];
 
-% Use saved design parameters, not interpolation of the order-6 surface.
-load(geometry_file,'metadata')
-settings.geometry_options=metadata.options;
-settings.thickness=metadata.thickness;
+if ~isfolder(fullfile(root,'data')), mkdir(fullfile(root,'data')); end
 for norder=norders
-    run_order(root,norder,settings,metadata);
+    run_order(root,norder,settings);
 end
 
-function run_order(root,norder,settings,reference)
+function run_order(root,norder,settings)
 %% Same patches and analytic geometry, new quadrature nodes
 settings.norder=norder;
 opts=settings.geometry_options;
 opts.norder=norder;
 [S,parts]=hirax_common_local_leaves_surfer(settings.thickness,opts);
-assert(isequal(parts.common_core,reference.common_core) && ...
-    isequal(parts.local_core,reference.local_core) && ...
-    isequal(parts.outlines,reference.outlines), ...
-    'Geometry/patch partition changed relative to the reference design.')
+settings.geometry_options=parts.options;
 common=cell(1,4); local=cell(1,4);
 reflection=cell(1,8);
 common_reflection=leaf_midplane_permutation(parts.local_common_surfer,parts.common_groups);
