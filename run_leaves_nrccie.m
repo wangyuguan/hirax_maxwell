@@ -14,8 +14,8 @@ settings.alpha=1;
 settings.eps_quad=1e-11;
 settings.eps_fmm=1e-9;
 settings.eps_gmres=1e-8;
-settings.gmres_restart=100; % [] for unrestarted GMRES
-settings.gmres_maxit=10;   % restart cycles; with restart=[], set e.g. 1000 steps
+settings.gmres_restart=[]; % unrestarted GMRES
+settings.gmres_maxit=1000; % maximum iterations
 settings.quad_batch_size=2000;
 settings.source_info.r=[0;0;10*69.25];
 settings.source_info.edips=-69.25^3*[1;1i;0];
