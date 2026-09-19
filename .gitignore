@@ -7,3 +7,5 @@ fort.*
 *.mat
 *.pdf
 leaf_photos/
+slurm_jobs/**/*.out
+slurm_jobs/**/*.err

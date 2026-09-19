@@ -7,7 +7,7 @@ addpath(fullfile(root,'..','fmm3dbie-hirax-dev','FMM3D','matlab'),fullfile(root,
 clear pth dir
 
 %% Parameters
-norders=[4 6 8 10 12];
+norders=[10];
 settings.geometry_options=struct(); % override geometry defaults here
 settings.thickness=.6925; % mm
 settings.zk=2*pi/(10*69.25);
@@ -74,9 +74,11 @@ rhs_components=[sum(operator.ru.*tangent_rhs,1); ...
 rhs=rhs_components(:);
 
 %% Solve and save
+fprintf('Order %d: starting GMRES for %d unknowns\n',norder,numel(rhs));
 timer=tic;
-[solution,flag,relres,iter,resvec]=gmres(matvec,rhs,settings.gmres_restart,eps_gmres,settings.gmres_maxit);
+[solution,flag,relres,iter,resvec]=gmres_with_progress(matvec,rhs,settings.gmres_restart,eps_gmres,settings.gmres_maxit);
 solve_time=toc(timer);
+fprintf('Order %d: verifying the true residual\n',norder);
 true_relative_residual=norm(matvec(solution)-rhs)/norm(rhs);
 clear matvec
 operator=rmfield(operator,'apply_corrections');

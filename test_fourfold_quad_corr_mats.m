@@ -4,7 +4,7 @@ clear
 clc
 
 run('../fmm3dbie-hirax-dev/matlab/startup.m')
-addpath('../FMM3D/matlab')
+addpath('../fmm3dbie-hirax-dev/FMM3D/matlab')
 addpath('src')
 
 rng(1)

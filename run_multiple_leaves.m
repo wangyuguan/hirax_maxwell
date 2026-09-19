@@ -6,10 +6,10 @@ clc
 
 run('../fmm3dbie-hirax-dev/matlab/startup.m')
 run('../chunkie/startup.m')
-addpath('../FMM3D/matlab')
+addpath('../fmm3dbie-hirax-dev/FMM3D/matlab')
 addpath('src')
 
-norders = [4,6,8];
+norders = [10, 12];
 for norder = norders
     run_one_order(norder)
 end
