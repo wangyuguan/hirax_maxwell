@@ -9,7 +9,6 @@ surface_current = operator.ru.*density_components(1,:)+ ...
 surface_charge = density_components(3,:);
 density = [surface_current;surface_charge];
 
-source = struct();
 source.sources = operator.r;
 source.nd = 4;
 source.charges = density.*operator.wts;

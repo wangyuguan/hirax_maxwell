@@ -18,19 +18,19 @@ function [corrections,info] = fourfold_quad_corr_mats( ...
 % at the matching relative position in the cycle.
 % Optional REFLECTION maps nodes under z -> -z and halves the stored rows.
 
-if nargin<7, batch_size=[]; end
-if nargin<8, reflection=[]; end
-target_ids=[];
+if nargin<7, batch_size = []; end
+if nargin<8, reflection = []; end
+target_ids = [];
 if ~isempty(reflection)
-    target_ids=find((1:S1.npts)<reflection);
-    if isempty(batch_size), batch_size=2000; end
+    target_ids = find((1:S1.npts)<reflection);
+    if isempty(batch_size), batch_size = 2000; end
 end
 surfaces = {S1,S2,S4,S3};
 cycle_to_merge = [1,2,4,3];
 Q = [0,1,0;-1,0,0;0,0,1];
 
 npts = S1.npts;
-for isurface = 1:4
+for isurface = 2:4
     assert(surfaces{isurface}.npts == npts, ...
         'All four surfaces must have the same number of nodes.')
     assert(isequal(surfaces{isurface}.norders,S1.norders) && ...
@@ -66,10 +66,10 @@ Bz = cell(1,4);
 for source_cycle = 1:4
     source_surface = surfaces{source_cycle};
     if ~isempty(batch_size)
-        target=S1;
-        if source_cycle==1, target=[]; end
-        B=nrccie_quad_corr_block(source_surface,eps_quad,zk,target,batch_size,target_ids);
-        [Bslp{source_cycle},Bx{source_cycle},By{source_cycle},Bz{source_cycle}]=B{:};
+        target = S1;
+        if source_cycle==1, target = []; end
+        B = nrccie_quad_corr_block(source_surface,eps_quad,zk,target,batch_size,target_ids);
+        [Bslp{source_cycle},Bx{source_cycle},By{source_cycle},Bz{source_cycle}] = B{:};
     elseif source_cycle == 1
         Bslp{source_cycle} = em3d.slp.get_quad_corr_mat( ...
             source_surface,eps_quad,zk);
@@ -94,7 +94,6 @@ for source_cycle = 1:4
         nnz(Bz{source_cycle}) > 0;
 end
 
-corrections = struct();
 corrections.slp = Bslp;
 corrections.gx = Bx;
 corrections.gy = By;
@@ -106,7 +105,6 @@ corrections.component_npts = npts;
 corrections.npts = 4*npts;
 corrections.reflection = reflection;
 
-info = struct();
 info.cycle_to_merge = cycle_to_merge;
 info.rotation = Q;
 info.position_errors = position_errors;

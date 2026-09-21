@@ -8,15 +8,15 @@ function [Cslp,Cx,Cy,Cz] = fourfold_expand_quad_corr(corrections)
 
 cycle_to_merge = corrections.cycle_to_merge;
 Q = corrections.rotation;
-if isfield(corrections,'reflection') && ~isempty(corrections.reflection)
-    perm=corrections.reflection; n=numel(perm);
-    rows=find((1:n)<perm); names={'slp','gx','gy','gz'}; signs=[1,1,1,-1];
-    [~,row_order]=sort([rows,perm(rows)]);
-    for k=1:4
-        for j=1:4
-            B=corrections.(names{k}){j};
-            A=[B;signs(k)*B(:,perm)];
-            corrections.(names{k}){j}=A(row_order,:);
+if ~isempty(corrections.reflection)
+    perm = corrections.reflection; n = numel(perm);
+    rows = find((1:n)<perm); names = {'slp','gx','gy','gz'}; signs = [1,1,1,-1];
+    [~,row_order] = sort([rows,perm(rows)]);
+    for k = 1:4
+        for j = 1:4
+            B = corrections.(names{k}){j};
+            A = [B;signs(k)*B(:,perm)];
+            corrections.(names{k}){j} = A(row_order,:);
         end
     end
 end

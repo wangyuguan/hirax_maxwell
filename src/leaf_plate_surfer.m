@@ -1,5 +1,5 @@
-function [S,parts] = hirax_chunkie_leaf_plate_surfer(thickness,opts)
-%HIRAX_CHUNKIE_LEAF_PLATE_SURFER Smooth HIRAX-shaped thin plate.
+function [S,parts] = leaf_plate_surfer(thickness,opts)
+%LEAF_PLATE_SURFER Smooth thin leaf surface.
 %
 % The physical geometry is generated directly in the original HIRAX length
 % scale.  The planform is translated to the origin, but it is not divided by
@@ -57,36 +57,10 @@ if ~isfield(opts,'outline_refinement') || ...
         isempty(opts.outline_refinement)
     opts.outline_refinement = 1;
 end
-validateattributes(thickness,{'numeric'}, ...
-    {'real','finite','scalar','positive'});
-validateattributes(opts.norder,{'numeric'}, ...
-    {'real','finite','scalar','integer','>=',4});
-validateattributes(opts.chunkie_order,{'numeric'}, ...
-    {'real','finite','scalar','integer','>=',10});
-validateattributes(opts.chunkie_n0,{'numeric'}, ...
-    {'real','finite','scalar','integer','>=',2});
-validateattributes(opts.chunkie_nchs,{'numeric'}, ...
-    {'real','finite','scalar','integer','>=',1});
-validateattributes(opts.chunkie_newton_iterations,{'numeric'}, ...
-    {'real','finite','scalar','integer','>=',1});
-validateattributes(opts.rim_width,{'numeric'}, ...
-    {'real','finite','scalar','positive'});
-validateattributes(opts.cap_collar_width,{'numeric'}, ...
-    {'real','finite','scalar','positive'});
-validateattributes(opts.cap_mesh_spacing,{'numeric'}, ...
-    {'real','finite','scalar','positive'});
-validateattributes(opts.cap_mesh_spacing_center,{'numeric'}, ...
-    {'real','finite','scalar','positive'});
-validateattributes(opts.cap_mesh_spacing_side,{'numeric'}, ...
-    {'real','finite','scalar','positive'});
-validateattributes(opts.cap_mesh_side_start,{'numeric'}, ...
-    {'real','finite','scalar','>=',0,'<',1});
-validateattributes(opts.wall_profile_refinement,{'numeric'}, ...
-    {'real','finite','scalar','integer','>=',1});
-validateattributes(opts.outline_refinement,{'numeric'}, ...
-    {'real','finite','scalar','integer','>=',1});
 norder = opts.norder;
-[outline,design] = fixed_chunkie_outline(opts);
+master_parts = leaf_master_geometry(opts);
+outline = master_parts.outline;
+design = master_parts.design;
 number_of_master_outline_panels = outline.number_of_panels;
 if opts.outline_refinement>1
     outline_order = outline.order;
@@ -228,7 +202,6 @@ bottom_core = surfer(number_of_core_triangles,norder, ...
 S = merge([top_core,top_collar,upper_wall,lower_wall, ...
     bottom_collar,bottom_core]);
 
-parts = struct();
 offset = 0;
 parts.top_core = offset+(1:top_core.npatches);
 offset = parts.top_core(end);
@@ -275,130 +248,9 @@ parts.profile = 'fixed_quintic_c2';
 parts.outline = 'fixed_chunkie_smoothed_no_corners';
 parts.options = opts;
 
-parts.max_position_mismatch = shared_edge_position_error(S,parts,norder);
-parts.max_normal_mismatch_degrees = shared_edge_normal_error(S,parts,norder);
+[parts.max_position_mismatch,parts.max_normal_mismatch_degrees] = ...
+    shared_edge_errors(S,parts,norder);
 
-end
-
-
-function [outline,design] = fixed_chunkie_outline(opts)
-% Cache one deterministic master curve inside this MATLAB process.  The
-% cache avoids rerunning Chunkie's Newton smoother at every surface order.
-persistent cached_parameters cached_outline cached_design
-parameters = [opts.chunkie_order opts.chunkie_n0 opts.chunkie_nchs ...
-    opts.chunkie_newton_iterations];
-if ~isempty(cached_parameters) && isequal(parameters,cached_parameters)
-    outline = cached_outline;
-    design = cached_design;
-    return
-end
-
-% Original single-leaf dimensions, in the same units as the HIRAX script.
-x0 = 0;
-y0 = 80.35;
-x1 = -49.25;
-y1 = 80.35;
-x2 = 49.25;
-y2 = 80.35;
-x3 = 0;
-y3 = 2.83;
-circle_radius = 20.0;
-bottom_half_width = 13.8;
-ellipse_radius_x = 69.25;
-ellipse_radius_y = 54.41;
-
-bottom_left = [x3-bottom_half_width;y3+bottom_half_width];
-bottom_right = [x3+bottom_half_width;y3+bottom_half_width];
-right_circle_start = [x2+circle_radius*cos(-pi/4); ...
-    y2+circle_radius*sin(-pi/4)];
-right_ellipse_join = [x2+circle_radius;y2];
-left_ellipse_join = [x1-circle_radius;y1];
-left_circle_end = [x1+circle_radius*cos(5*pi/4); ...
-    y1+circle_radius*sin(5*pi/4)];
-
-n0 = opts.chunkie_n0;
-bottom = open_line(bottom_left,bottom_right,n0);
-right_line = open_line(bottom_right,right_circle_start,ceil(7*n0/4));
-right_circle = open_circle([x2;y2],circle_radius,-pi/4,0,n0);
-upper_ellipse = open_ellipse([x0;y0],ellipse_radius_x, ...
-    ellipse_radius_y,0,pi,ceil(30*n0/4));
-left_circle = open_circle([x1;y1],circle_radius,pi,5*pi/4,n0);
-left_line = open_line(left_circle_end,bottom_left,ceil(7*n0/4));
-raw_vertices = [bottom right_line right_circle upper_ellipse ...
-    left_circle left_line];
-
-smoother_options = struct();
-smoother_options.k = opts.chunkie_order;
-smoother_options.n_newton = opts.chunkie_newton_iterations;
-smoother_options.nchs = opts.chunkie_nchs;
-master = chnk.smoother.smooth(raw_vertices,smoother_options);
-master = sort(master);
-
-leaf_center = [0;0.5*(bottom_left(2)+y0+ellipse_radius_y)];
-leaf_scale = ellipse_radius_x;
-number_of_panels = master.nch;
-[~,~,values_to_coefficients] = lege.exps(master.k);
-position_coefficients = zeros(2,master.k,number_of_panels);
-for panel = 1:number_of_panels
-    values = squeeze(master.r(:,:,panel));
-    values = values-leaf_center;
-    position_coefficients(:,:,panel) = ...
-        (values_to_coefficients*values.').';
-end
-
-outline = struct();
-outline.order = master.k;
-outline.number_of_panels = number_of_panels;
-outline.position_coefficients = position_coefficients;
-outline.raw_vertices = raw_vertices-leaf_center;
-[outline.panel_starts,outline.panel_start_derivatives] = ...
-    chunkie_panel_starts(outline);
-
-design = struct();
-design.bottom_left = bottom_left-leaf_center;
-design.bottom_right = bottom_right-leaf_center;
-design.right_circle_start = right_circle_start-leaf_center;
-design.right_ellipse_join = right_ellipse_join-leaf_center;
-design.left_ellipse_join = left_ellipse_join-leaf_center;
-design.left_circle_end = left_circle_end-leaf_center;
-design.leaf_center_raw = leaf_center;
-design.leaf_scale = leaf_scale;
-
-cached_parameters = parameters;
-cached_outline = outline;
-cached_design = design;
-end
-
-
-function points = open_line(point_a,point_b,number_of_points)
-q = (0:number_of_points-1)/number_of_points;
-points = point_a+(point_b-point_a).*q;
-end
-
-
-function points = open_circle(center,radius,theta_start,theta_end, ...
-        number_of_points)
-q = (0:number_of_points-1)/number_of_points;
-theta = theta_start+(theta_end-theta_start)*q;
-points = center+radius*[cos(theta);sin(theta)];
-end
-
-
-function points = open_ellipse(center,radius_x,radius_y,theta_start, ...
-        theta_end,number_of_points)
-q = (0:number_of_points-1)/number_of_points;
-theta = theta_start+(theta_end-theta_start)*q;
-points = center+[radius_x*cos(theta);radius_y*sin(theta)];
-end
-
-
-function [starts,derivatives] = chunkie_panel_starts(outline)
-starts = zeros(2,outline.number_of_panels);
-derivatives = zeros(size(starts));
-for panel = 1:outline.number_of_panels
-    [starts(:,panel),derivatives(:,panel)] = ...
-        chunkie_panel_values(outline,panel,0);
-end
 end
 
 
@@ -500,10 +352,31 @@ end
 function [position,derivative] = chunkie_panel_values(outline,panel,q)
 t = 2*q-1;
 [polynomials,polynomial_derivatives] = lege.pols(t,outline.order-1);
+polynomials = reshape(polynomials,outline.order,[]);
+polynomial_derivatives = reshape(polynomial_derivatives,outline.order,[]);
+n = (0:outline.order-1).';
+left = t == -1;
+right = t == 1;
+if any(left)
+    polynomial_derivatives(:,left) = ...
+        ((-1).^(n+1).*n.*(n+1)/2).*ones(1,nnz(left));
+end
+if any(right)
+    polynomial_derivatives(:,right) = ...
+        (n.*(n+1)/2).*ones(1,nnz(right));
+end
 coefficients = outline.position_coefficients(:,:,panel);
-position = coefficients*reshape(polynomials,outline.order,[]);
-derivative = 2*coefficients*reshape( ...
-    polynomial_derivatives,outline.order,[]);
+position = coefficients*polynomials;
+derivative = 2*coefficients*polynomial_derivatives;
+end
+
+function [starts,derivatives] = chunkie_panel_starts(outline)
+starts = zeros(2,outline.number_of_panels);
+derivatives = zeros(size(starts));
+for panel = 1:outline.number_of_panels
+    [starts(:,panel),derivatives(:,panel)] = ...
+        chunkie_panel_values(outline,panel,0);
+end
 end
 
 
@@ -559,7 +432,11 @@ function interior = adaptive_core_points(vertices,center_spacing, ...
 % through the middle. The same local spacing is used vertically, so the
 % resulting Delaunay triangles remain approximately isotropic.
 x_scale = max(abs(vertices(1,:)));
-candidate_points = zeros(2,0);
+hmin = min(center_spacing,side_spacing);
+nx = ceil(diff(x_limits)/(sqrt(3)/2*hmin))+2;
+ny = ceil(diff(y_limits)/hmin)+2;
+candidate_points = zeros(2,nx*ny);
+count = 0;
 column = 0;
 x = x_limits(1)+0.5*local_cap_spacing( ...
     x_limits(1),x_scale,center_spacing,side_spacing,side_start);
@@ -569,12 +446,14 @@ while x<x_limits(2)
         side_spacing,side_start);
     y_offset = 0.5*local_spacing*(1+mod(column,2));
     y = y_limits(1)+y_offset:local_spacing:y_limits(2);
-    candidate_points = [candidate_points, ...
-        [x*ones(1,numel(y));y]];
+    ids = count+(1:numel(y));
+    candidate_points(:,ids) = [x*ones(1,numel(y));y];
+    count = count+numel(y);
     x = x+sqrt(3)/2*local_spacing;
     column = column+1;
 end
 
+candidate_points = candidate_points(:,1:count);
 inside = inpolygon(candidate_points(1,:),candidate_points(2,:), ...
     vertices(1,:),vertices(2,:));
 interior = candidate_points(:,inside);
@@ -627,27 +506,16 @@ normal = normal./vecnorm(normal,2,1);
 end
 
 
-function error_value = shared_edge_position_error(S,parts,norder)
-[error_value,~] = shared_edge_errors(S,parts,norder);
-end
-
-
-function error_value = shared_edge_normal_error(S,parts,norder)
-[~,error_value] = shared_edge_errors(S,parts,norder);
-end
-
-
 function [position_error,normal_error] = shared_edge_errors(S,parts,norder)
 sample = linspace(-1,1,max(33,4*norder+1));
 position_error = 0;
 normal_error = 0;
-groups = {parts.top_collar,parts.bottom_collar};
-edge_coordinates = [1 2];
+groups = cell(1,2+2*parts.number_of_wall_profile_panels);
+groups(1:2) = {parts.top_collar,parts.bottom_collar};
+edge_coordinates = [1,2,2*ones(1,2*parts.number_of_wall_profile_panels)];
 for profile_panel = 1:parts.number_of_wall_profile_panels
-    groups{end+1} = parts.upper_wall_by_profile(profile_panel,:);
-    edge_coordinates(end+1) = 2;
-    groups{end+1} = parts.lower_wall_by_profile(profile_panel,:);
-    edge_coordinates(end+1) = 2;
+    groups{2*profile_panel+1} = parts.upper_wall_by_profile(profile_panel,:);
+    groups{2*profile_panel+2} = parts.lower_wall_by_profile(profile_panel,:);
 end
 for group_id = 1:numel(groups)
     group = groups{group_id};

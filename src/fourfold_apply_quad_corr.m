@@ -16,9 +16,6 @@ cycle_to_merge = corrections.cycle_to_merge;
 Q = corrections.rotation;
 
 ndensity = size(density,1);
-assert(size(density,2) == 4*component_npts, ...
-    'Density has %d columns; expected %d.', ...
-    size(density,2),4*component_npts)
 
 potential = complex(zeros(ndensity,4*component_npts));
 gradient_x = complex(zeros(ndensity,4*component_npts));
@@ -40,15 +37,15 @@ for target_cycle = 1:4
             cycle_to_merge(source_cycle),component_npts);
         source_density = density(:,source_columns).';
 
-        if isfield(corrections,'reflection') && ~isempty(corrections.reflection)
-            B={corrections.slp{relative_cycle},corrections.gx{relative_cycle}, ...
+        if ~isempty(corrections.reflection)
+            B = {corrections.slp{relative_cycle},corrections.gx{relative_cycle}, ...
                 corrections.gy{relative_cycle},corrections.gz{relative_cycle}};
-            [p,x,y,z]=apply_midplane_quad_corr(B,source_density, ...
+            [p,x,y,z] = apply_midplane_quad_corr(B,source_density, ...
                 corrections.reflection,corrections.reflection);
-            accumulated_potential=accumulated_potential+p;
-            accumulated_x=accumulated_x+x;
-            accumulated_y=accumulated_y+y;
-            accumulated_z=accumulated_z+z;
+            accumulated_potential = accumulated_potential+p;
+            accumulated_x = accumulated_x+x;
+            accumulated_y = accumulated_y+y;
+            accumulated_z = accumulated_z+z;
             continue
         end
 

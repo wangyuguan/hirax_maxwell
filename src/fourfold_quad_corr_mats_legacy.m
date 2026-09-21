@@ -16,7 +16,7 @@ cycle_to_merge = [1,2,4,3];
 Q = [0,1,0;-1,0,0;0,0,1];
 
 npts = S1.npts;
-for isurface = 1:4
+for isurface = 2:4
     assert(surfaces{isurface}.npts == npts, ...
         'All four surfaces must have the same number of nodes.')
 end
@@ -96,7 +96,6 @@ Cx = cell2mat(Cx_blocks);
 Cy = cell2mat(Cy_blocks);
 Cz = cell2mat(Cz_blocks);
 
-info = struct();
 info.cycle_to_merge = cycle_to_merge;
 info.rotation = Q;
 info.position_errors = position_errors;
