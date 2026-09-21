@@ -14,7 +14,7 @@ clear pth dir
 settings.geometry_revision = leaf_geometry_revision();
 settings.geometry_options = leaf_geometry_options();
 settings.leaf_id = 1;                       % TL/TR/BL/BR ordering
-settings.surface_orders = [4 6 8 10];
+settings.surface_orders = [4 6 8 10 12];
 settings.integration_orders = [16 20];
 settings.thickness = .6925;                 % mm
 settings.leaf_radius = 69.25;               % mm
