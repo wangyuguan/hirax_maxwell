@@ -5,7 +5,7 @@ root = fileparts(test_dir);
 run(fullfile(root,'..','fmm3dbie-hirax-dev','matlab','startup.m'))
 run(fullfile(root,'..','chunkie','startup.m'))
 addpath(fullfile(root,'..','fmm3dbie-hirax-dev','FMM3D','matlab'))
-addpath(fullfile(root,'src'))
+addpath(genpath(fullfile(root,'src')))
 clear pth dir
 
 %% Parameters
@@ -63,22 +63,17 @@ clear common local
 fprintf('Stored / expanded correction nonzeros: %d / %d\n', ...
     correction_info.stored_nonzeros,correction_info.assembled_nonzeros)
 fprintf('Correction storage: %.2f GiB\n',correction_info.stored_bytes/2^30)
-operator.npts = S.npts;
-operator.r = S.r;
-operator.wts = S.wts(:).';
-operator.n = S.n;
-operator.ru = S.du./vecnorm(S.du,2,1);
-operator.zk = zk;
-operator.alpha = alpha;
-operator.eps_fmm = eps_fmm;
-operator.rv = cross(operator.n,operator.ru,1);
-operator.apply_corrections = @(d)common_local_apply_quad_corr(corrections,d);
-matvec = @(x)apply_nrccie(x,operator);
+surface_ru = S.dru;
+surface_rv = S.drv;
+nrccie_options = struct('zk',zk,'alpha',alpha, ...
+    'jump',0.5,'fmm',true,'eps_fmm',eps_fmm);
+correction_apply = @(d)common_local_apply_quad_corr(corrections,d);
+matvec = @(x)nrccie_apply(S,x,correction_apply,nrccie_options);
 [einc,hinc] = em3d.incoming_sources(zk,source_info,S,'electric dipole');
 normal_einc = sum(S.n.*einc,1);
 tangent_rhs = cross(S.n,hinc,1)-alpha*(S.n.*normal_einc-einc);
-rhs_components = [sum(operator.ru.*tangent_rhs,1); ...
-    sum(operator.rv.*tangent_rhs,1);normal_einc];
+rhs_components = [sum(surface_ru.*tangent_rhs,1); ...
+    sum(surface_rv.*tangent_rhs,1);normal_einc];
 rhs = rhs_components(:);
 
 %% Solve and save
@@ -89,10 +84,9 @@ solve_time = toc(timer);
 fprintf('Order %d: verifying the true residual\n',norder);
 true_relative_residual = norm(matvec(solution)-rhs)/norm(rhs);
 clear matvec
-operator = rmfield(operator,'apply_corrections');
-clear corrections
+clear correction_apply corrections
 d = reshape(solution,3,S.npts);
-surface_current = operator.ru.*d(1,:)+operator.rv.*d(2,:);
+surface_current = surface_ru.*d(1,:)+surface_rv.*d(2,:);
 surface_charge = d(3,:);
 solver_data.gmres_flag = flag;
 solver_data.gmres_relative_residual = relres;

@@ -1,5 +1,6 @@
 function B = nrccie_quad_corr_block(S,eps_quad,zk,T,batch_size,target_ids)
 % Limit near-quadrature workspace by batching target rows. Empty T means self.
+if nargin<4, T = []; end
 if nargin<5 || isempty(batch_size), batch_size = 2000; end
 self = isempty(T);
 if self, T = S; end

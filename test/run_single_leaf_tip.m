@@ -7,7 +7,7 @@ root = fileparts(test_dir);
 run(fullfile(root,'..','fmm3dbie-hirax-dev','matlab','startup.m'))
 run(fullfile(root,'..','chunkie','startup.m'))
 addpath(fullfile(root,'..','fmm3dbie-hirax-dev','FMM3D','matlab'))
-addpath(fullfile(root,'src'))
+addpath(genpath(fullfile(root,'src')))
 clear pth dir
 
 %% Run settings
@@ -18,13 +18,13 @@ settings.surface_orders = [4 6 8 10 12];
 settings.integration_orders = [16 20];
 settings.thickness = .6925;                 % mm
 settings.leaf_radius = 69.25;               % mm
-settings.zk = 2*pi/(10*settings.leaf_radius);
+settings.zk = pi/settings.leaf_radius;       % approx. one wavelength per leaf
 settings.alpha = 1;
 settings.eps_quad = 1e-11;
 settings.eps_fmm = 1e-9;
 settings.eps_gmres = 1e-8;
-settings.gmres_restart = 100;
-settings.gmres_maxit = 10;
+settings.gmres_restart = [];
+settings.gmres_maxit = 1000;
 settings.quad_batch_size = 2000;
 settings.outline_samples_per_panel = 17;
 settings.electric_dipole = -settings.leaf_radius^3*[1;1i;0];
@@ -156,19 +156,16 @@ for order_id = 1:number_of_orders
             '%.2f GiB\n'],norder,correction_nonzeros, ...
             2*correction_nonzeros,correction_bytes/2^30)
 
-        operator.npts = S.npts;
-        operator.r = S.r;
-        operator.wts = S.wts(:).';
-        operator.n = S.n;
-        operator.ru = S.du./vecnorm(S.du,2,1);
-        operator.rv = cross(operator.n,operator.ru,1);
-        operator.zk = settings.zk;
-        operator.alpha = settings.alpha;
-        operator.eps_fmm = settings.eps_fmm;
-        operator.apply_corrections = ...
+        surface_ru = S.dru;
+        surface_rv = S.drv;
+        nrccie_options = struct('zk',settings.zk, ...
+            'alpha',settings.alpha,'jump',0.5,'fmm',true, ...
+            'eps_fmm',settings.eps_fmm);
+        correction_apply = ...
             @(density)apply_single_corrections( ...
             corrections,density,reflection);
-        matvec = @(x)apply_nrccie(x,operator);
+        matvec = @(x)nrccie_apply( ...
+            S,x,correction_apply,nrccie_options);
 
         [einc,hinc] = em3d.incoming_sources( ...
             settings.zk,settings.source_info,S,'electric dipole');
@@ -177,8 +174,8 @@ for order_id = 1:number_of_orders
         normal_einc = sum(S.n.*einc,1);
         tangent_rhs = cross(S.n,hinc,1)-settings.alpha*( ...
             S.n.*normal_einc-einc);
-        rhs_components = [sum(operator.ru.*tangent_rhs,1); ...
-            sum(operator.rv.*tangent_rhs,1);normal_einc];
+        rhs_components = [sum(surface_ru.*tangent_rhs,1); ...
+            sum(surface_rv.*tangent_rhs,1);normal_einc];
         rhs = rhs_components(:);
 
         fprintf('Order %d: starting GMRES for %d unknowns\n',norder,numel(rhs))
@@ -193,12 +190,13 @@ for order_id = 1:number_of_orders
             norder,true_relative_residual)
 
         components = reshape(solution,3,S.npts);
-        surface_current = operator.ru.*components(1,:)+ ...
-            operator.rv.*components(2,:);
+        surface_current = surface_ru.*components(1,:)+ ...
+            surface_rv.*components(2,:);
         surface_charge = components(3,:);
         density = [surface_current;surface_charge];
-        clear matvec operator corrections solution components rhs einc hinc ...
-            reflection correction_target_ids normal_einc tangent_rhs
+        clear matvec correction_apply nrccie_options corrections solution ...
+            components rhs einc hinc reflection correction_target_ids ...
+            normal_einc tangent_rhs surface_ru surface_rv
 
         electric_fields = cell(1,numel(settings.integration_orders));
         integration_times = zeros(1,numel(settings.integration_orders));

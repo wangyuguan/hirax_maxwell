@@ -3,7 +3,7 @@ function [S,parts] = run_common_local_leaves_geometry(norder,opts)
 
 if nargin<1 || isempty(norder), norder = 6; end
 if nargin<2, opts = struct(); end
-root = fileparts(fileparts(mfilename('fullpath')));
+root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
 output_file = fullfile(root,'data',sprintf('common_local_geometry_order%02d.mat',norder));
 if isfield(opts,'output_file'), output_file = opts.output_file; end
 [geometry,metadata,S,parts] = build_leaf_geometry(norder,opts);
