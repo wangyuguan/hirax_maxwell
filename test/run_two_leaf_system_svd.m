@@ -9,10 +9,12 @@
 % A = [A11 A12; A21 A22], target leaf first, source leaf second.
 % Each node carries interleaved [ju;jv;rho]; only A11/A22 contain jump*I.
 % Low-order discretization for inspecting the matrix, not a converged solve.
-% Defaults use original leaves 1 and 2, order 3, and 67488 scalar unknowns.
+% Defaults use original leaves 1 and 2; set the patch order in settings.norder
+% (order 1: 17712 scalar unknowns, order 3: 67488).
 %
 % A is assembled in RAM in target-row batches and never written to disk
-% (67.87 GiB at order 3); svd(A) needs about one more copy as workspace.
+% (4.67 GiB at order 1, 67.87 GiB at order 3); svd(A) needs about one more
+% copy as workspace.
 % Only the singular values and a spectrum plot are saved, to
 % data/*_svd.mat and *_svd.png. These are the raw coefficient-matrix
 % singular values in the Euclidean DOF norm; no quadrature-weighted L2
@@ -36,7 +38,7 @@ settings.leaf_ids = [1,2]; % TL/TR/BL/BR = 1/2/3/4
 settings.leaf_radius = 69.25; % mm
 settings.thickness = 0.6925;
 settings.surface_gap = 4;
-settings.norder = 2; % do not use 0: constant position patches degenerate
+settings.norder = 1; % do not use 0: constant position patches degenerate
 settings.zk = 2*pi/(10*settings.leaf_radius);
 settings.alpha = 1;
 settings.jump = 0.5;
