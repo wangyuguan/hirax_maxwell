@@ -1,4 +1,4 @@
-% Manufactured Maxwell solutions on a small ellipsoid using NRCCIE_APPLY.
+% Server benchmark: 7,986-node ellipsoid using NRCCIE_APPLY.
 % An interior dipole gives an analytic radiating exterior solution, while
 % an exterior dipole gives an analytic regular interior solution. With the
 % outward normal and this test's manufactured RHS and field representation,
@@ -11,7 +11,7 @@ addpath(fullfile(root,'..','fmm3dbie-hirax-dev','FMM3D','matlab'))
 addpath(genpath(fullfile(root,'src')))
 clear pth dir
 
-%% Small ellipsoid and matrix-free NRCCIE operator
+%% Ellipsoid and matrix-free NRCCIE operator
 semi_axes = [1.2,0.85,0.65];
 patches_per_axis = [3,3,4];
 surface_order = 10;

@@ -1,4 +1,4 @@
-% NRCCIE self-convergence runs: regenerate the same geometry at each order.
+% NRCCIE self-convergence for four identical original leaves.
 clear
 test_dir = fileparts(mfilename('fullpath'));
 root = fileparts(test_dir);
@@ -36,15 +36,8 @@ opts = settings.geometry_options;
 opts.norder = norder;
 [S,parts] = generate_leaves_surfer(settings.thickness,opts);
 settings.geometry_options = parts.options;
-common = cell(1,4); local = cell(1,4);
-reflection = cell(1,8);
-common_reflection = leaf_midplane_permutation(parts.local_common_surfer,parts.common_groups);
-for j = 1:4
-    common{j} = affine_transf(parts.local_common_surfer,parts.rotation(:,:,j),parts.shift(:,j));
-    local{j} = affine_transf(parts.local_unique_surfers{j},parts.rotation(:,:,j),parts.shift(:,j));
-    reflection{2*j-1} = common_reflection;
-    reflection{2*j} = leaf_midplane_permutation(parts.local_unique_surfers{j},parts.local_groups{j});
-end
+leaves = parts.leaves;
+reflection = leaf_midplane_permutation(parts.base_surfer,parts.base_parts);
 settings.rotations = parts.rotation;
 settings.shifts = parts.shift;
 clear parts
@@ -52,14 +45,19 @@ fprintf('Order %d: %d nodes, %d unknowns\n',norder,S.npts,3*S.npts)
 zk = settings.zk; alpha = settings.alpha;
 eps_quad = settings.eps_quad; eps_fmm = settings.eps_fmm;
 eps_gmres = settings.eps_gmres; source_info = settings.source_info;
-output_file = fullfile(root,'data',sprintf('run_leaves_nrccie_order%d.mat',norder));
+output_file = fullfile(root,'data',sprintf('run_identical_leaves_nrccie_order%d.mat',norder));
 
 %% Corrections and NRCCIE
 timer = tic;
-[corrections,correction_info] = common_local_quad_corr_mats( ...
-    common,local,eps_quad,zk,settings.quad_batch_size,reflection);
+% Store one target-leaf block row; rotations supply the other three rows.
+% Midplane reflection also reuses each leaf's upper/lower surface rows.
+[corrections,correction_info] = fourfold_quad_corr_mats( ...
+    leaves{1},leaves{2},leaves{3},leaves{4}, ...
+    eps_quad,zk,settings.quad_batch_size,reflection);
 quadrature_time = toc(timer);
-clear common local
+storage = whos('corrections');
+correction_info.stored_bytes = storage.bytes;
+clear leaves
 fprintf('Stored / expanded correction nonzeros: %d / %d\n', ...
     correction_info.stored_nonzeros,correction_info.assembled_nonzeros)
 fprintf('Correction storage: %.2f GiB\n',correction_info.stored_bytes/2^30)
@@ -67,7 +65,7 @@ surface_ru = S.dru;
 surface_rv = S.drv;
 nrccie_options = struct('zk',zk,'alpha',alpha, ...
     'jump',0.5,'fmm',true,'eps_fmm',eps_fmm);
-correction_apply = @(d)common_local_apply_quad_corr(corrections,d);
+correction_apply = @(d)fourfold_apply_quad_corr(corrections,d);
 matvec = @(x)nrccie_apply(S,x,correction_apply,nrccie_options);
 [einc,hinc] = em3d.incoming_sources(zk,source_info,S,'electric dipole');
 normal_einc = sum(S.n.*einc,1);
