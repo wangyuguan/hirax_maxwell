@@ -14,9 +14,12 @@ Purpose
 
 Dependencies
   Place fmm3dbie-hirax-dev, FLAM, chunkie, and strong-skel next to this
-  repository. FMM3DBIE and FMM3D MEX files must already be compiled.
-  Run startup.m to set the MATLAB path. The attributed RS-S implementation is
-  in ../strong-skel; see that directory's README.
+  repository. Use https://github.com/wangyuguan/strong-skel at commit
+  2c27790db9a23c92c399ce5a9c0ef1dba784fd4e. This fork adds the deterministic
+  empty-proxy far-field mode used here and exposes the asymmetric multiply and
+  solve routines at its root. FMM3DBIE and FMM3D MEX files must already be
+  compiled. Run startup.m to set the MATLAB path; see ../strong-skel/README.md
+  for attribution, licensing, and the compatibility regression.
 
 Direct factorization of A
   The geometry consists of four C4-related leaves in cycle [1 2 4 3]. Only one
