@@ -1,0 +1,10 @@
+/data/
+/diagnostics/
+/test/results/
+/slurm_jobs/
+*.asv
+*.log
+/notes/*.aux
+/notes/*.out
+/notes/*.toc
+/notes/*.synctex.gz

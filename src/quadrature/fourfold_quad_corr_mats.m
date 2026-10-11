@@ -63,7 +63,9 @@ Bslp = cell(1,4);
 Bx = cell(1,4);
 By = cell(1,4);
 Bz = cell(1,4);
+block_seconds = zeros(1,4);
 for source_cycle = 1:4
+    block_timer = tic;
     source_surface = surfaces{source_cycle};
     if ~isempty(batch_size)
         target = S1;
@@ -82,6 +84,7 @@ for source_cycle = 1:4
             em3d.sgrad.get_quad_corr_mat( ...
             source_surface,eps_quad,zk,S1);
     end
+    block_seconds(source_cycle) = toc(block_timer);
 end
 
 % Surfaces on opposite corners have no near interaction at all, so the
@@ -111,6 +114,7 @@ info.position_errors = position_errors;
 info.normal_errors = normal_errors;
 info.weight_errors = weight_errors;
 info.nonempty = nonempty;
+info.block_seconds = block_seconds; % self, relative offsets 1, 2, 3
 info.base_block_nonzeros = zeros(4,4);
 for source_cycle = 1:4
     info.base_block_nonzeros(source_cycle,:) = [ ...

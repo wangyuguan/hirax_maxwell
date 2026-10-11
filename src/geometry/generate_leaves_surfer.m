@@ -2,9 +2,7 @@ function [S,parts] = generate_leaves_surfer(thickness,opts)
 % Four identical closed leaves in TL/TR/BL/BR order; lengths in mm.
 % Mesh the original leaf once and rotate/translate copies of that mesh.
 % S is merged in leaf order; parts.node_ids/patch_ids map into S.
-if nargin<2 || isempty(opts), opts = struct(); end
-opts = leaf_geometry_options(opts);
-validateattributes(opts.norder,{'numeric'},{'scalar','integer','>=',1})
+% Pass the mesh options and surface_gap explicitly; see the leaf example.
 [base,base_parts] = leaf_plate_surfer(thickness,opts);
 
 parts.base_surfer = base;

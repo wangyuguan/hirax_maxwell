@@ -1,0 +1,132 @@
+HIRAX Maxwell scattering (MATLAB)
+================================
+
+Purpose
+  Build and apply a direct solver for the complete corrected four-leaf NRCCIE
+  boundary-integral matrix A, then use it to assemble the scattering matrix.
+  The production solve is
+
+    A x = b,              A approximately F  (strong skeletonization),
+
+  where F is one asymmetric RS-S factorization of the full four-leaf operator.
+  The former cross-block hierarchy, Woodbury reduced system H, and reduced
+  GMRES solve are not part of the active algorithm.
+
+Dependencies
+  Place fmm3dbie-hirax-dev, FLAM, chunkie, and strong-skel next to this
+  repository. FMM3DBIE and FMM3D MEX files must already be compiled.
+  Run startup.m to set the MATLAB path. The attributed RS-S implementation is
+  in ../strong-skel; see that directory's README.
+
+Direct factorization of A
+  The geometry consists of four C4-related leaves in cycle [1 2 4 3]. Only one
+  compact quadrature-correction matrix is stored for each relative C4
+  orientation. The RS-S callback forms any requested submatrix A(rows,cols)
+  from the analytic NRCCIE block plus the corresponding compact correction.
+  It never forms the dense global matrix A.
+
+  The RS-S tree uses XY patch centers because each leaf is thin in z; all
+  kernels and quadrature remain fully three-dimensional. Strong
+  skeletonization selects scalar unknowns, as required by the external RS-S
+  package. The incoming and outgoing scattering spaces are instead selected
+  by complete physical nodes, retaining all three [ju;jv;rho] components.
+
+  Each right-hand side is first solved by an RS-S backsolve. The true residual
+  is then evaluated with the original corrected operator A, using an FMM
+  tolerance tighter than the requested solve tolerance. Residual-based
+  iterative refinement applies additional RS-S backsolves until the requested
+  global residual is reached or the explicit refinement limit is exhausted.
+  This is refinement of the full A system, not GMRES on a reduced matrix.
+
+Incoming, outgoing, and Scat
+  Incoming skeleton nodes interpolate sampled plane-wave boundary data.
+  Outgoing skeleton nodes reproduce fields measured on a proxy surface.
+  Both deterministic multilevel IDs are built on one representative leaf and
+  rotated to the other three leaves under C4 symmetry. They define the input
+  and output coordinates of Scat; they are independent of how A is solved.
+
+  Scat is assembled in column batches. Every batch uses the same direct A
+  factor and the same full-A residual check/refinement. There is no global
+  recompression of the four rotated incoming or outgoing spaces.
+
+Example
+  Edit the numerical parameters near the top of
+  test/nrccie_scattering_matrix_leaf.m, then run, for example,
+
+    matlab -batch \
+      "maxNumCompThreads(24); run('test/nrccie_scattering_matrix_leaf.m')"
+
+  All mesh, solver, skeleton, and field-check parameters are written directly
+  in that script. C4 correction reuse is always enabled. The default leaf
+  geometry uses wavelength 138.5 mm, approximately one nominal leaf width;
+  the outgoing proxy is four wavelengths away. Incoming training uses 1024
+  deterministic C4-closed directions with two polarizations. Held-out fields
+  are checked at 7, 8, and 10 wavelengths.
+
+  At norder=1 there are 2,952 nodes per leaf and 35,424 scalar unknowns in A.
+  At norder=4 there are 17,400 nodes per leaf and 208,800 scalar unknowns.
+
+Reference solve
+  The optional plain reference is disabled by default. Set run_reference=true
+  in the example to compare with zero-start, unrestarted, unpreconditioned
+  full-system FMM/GMRES. The reference applies the same compact C4 quadrature
+  corrections but does not use the RS-S factor. Disabling it does not disable
+  Scat assembly, held-out residual checks, or finite-radius field checks.
+  Agreement with this reference tests the discrete algebra; it is not a mesh-
+  convergence study.
+
+Outputs
+  run.log
+    Progress, skeleton sizes, true residuals, refinement counts, and timings.
+
+  progress.mat
+    A small status record; it is not a restart checkpoint.
+
+  factor.mat
+    The reusable direct RS-S factor of the full corrected matrix A and its
+    factorization metadata.
+
+  result.mat
+    Scat, incoming/outgoing skeleton surfaces, physical parameters, timing and
+    error records, and held-out finite-radius fields.
+
+  A successful complete run writes result.passed=true and prints
+  NRCCIE_SCATTERING_MATRIX_LEAF_PASS. Each run must use a new output directory;
+  existing results are not overwritten.
+
+  A saved scattering matrix is applied as
+
+    bin  = nrccie_planewave_rhs(Sin,zk,alpha,rotations);
+    qout = Scat*bin;
+    EH   = nrccie_matrix(Sout,targets,zk)*qout;
+
+Parameters
+  The main numerical tolerance is tol. The local RS-S IDs use this tolerance;
+  the true-residual FMM evaluation uses a tighter tolerance. max_nodes controls
+  leaf occupancy in the RS-S tree, max_refinement limits full-system residual
+  corrections, scattering_batch_size controls Scat workspace, and maxiter is
+  used only by the optional plain-GMRES reference. GMRES restart is not used.
+
+Validated direct-A measurements
+  These measurements compare direct factorization of A with the retired
+  cross-factor/Woodbury implementation on the same four-leaf problems. They
+  predate full-A residual refinement, so the quoted residuals are raw RS-S
+  solve residuals rather than the present stopping criterion.
+
+  norder=1:
+    peak process memory       12.976 GiB versus 21.966 GiB
+    retained factor memory     8.3996 GiB versus 13.5448 GiB
+    factorization time       1110.3 s versus 1897.6 s
+    dense root size            8046 versus 13929 unknowns
+    raw true residual          8.68e-8 versus 3.72e-8
+
+  norder=2:
+    peak process memory       27.8045 GiB versus 41.5328 GiB
+    retained factor memory    21.7029 GiB versus 30.9416 GiB
+    factorization time       4967.4 s versus 7639.0 s
+    dense root size            9208 versus 15273 unknowns
+    raw true residual          2.622e-7 versus 1.506e-7
+
+  Thus the direct-A formulation reduced measured peak memory by about 41% at
+  norder=1 and 33% at norder=2, while also reducing factorization time. These
+  are measurements from archived runs, not asymptotic complexity claims.
