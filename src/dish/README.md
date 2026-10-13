@@ -45,6 +45,15 @@ the shared folder's `mesh/out/`, generate a mesh as below, or pass a mesh path
 to `preview_dish`. `DISH_MESH_ROOT` can override `data/dish`.
 Preview `.fig` and `.png` files go into the ignored `results/` directory.
 
+The adaptive f/D = 0.23 candidate produced on 2026-10-13 is tracked with
+Git LFS at
+`data/dish/dish_fd023_m_adaptive_ad_as0_sig050w_cad12_p04_eps1e03/`.
+It contains 280,296 order-4 patches and 4,204,440 nodes. Its surface-validity
+check passed, but adaptive refinement stopped at depth 3 with 12 patches still
+above the requested tolerance, so it remains a candidate rather than a
+converged reference mesh. Install Git LFS before cloning or run `git lfs pull`
+to materialize the 1.18 GB `.go3` file.
+
 `setup_dish` uses fmm3dbie already on the MATLAB path, or looks for
 `fmm3dbie-hirax-dev` beside this repository. Set `NRCCIE_DEPENDENCY_ROOT`
 to use a different dependency directory. Meshing and smoothing dependencies
