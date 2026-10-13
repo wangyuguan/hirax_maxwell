@@ -1,0 +1,82 @@
+Experimental dish smoothing
+===========================
+
+These drivers preserve the smoothing experiments shared in Dropbox. They
+are separate from the mesh import and preview routines. Smoothing is still
+unresolved: no successful smoothed dish has been validated by this import.
+The SurfSmooth3D dependency is not installed in the local project dependency
+directory, and these drivers have not been run during the import.
+
+Files
+-----
+run_smooth.m is the current fixed-CAD two-stage experiment for dish_fd023_m.
+It retains the original adaptive/uniform mollifier choices, CAD oversampling,
+Newton recovery, validity checks, and failure diagnostics.
+
+launch.sh starts run_smooth under nohup. Its argument order is unchanged:
+  launch.sh [adapt_sigma sigma_frac cad_order out_order rlam_override]
+
+smooth_dish_rimfree.m preserves the earlier dish_fd021_m_rimfree experiment
+with orders 4 and 8, rlam 10, and adaptive smoothing. These are historical
+settings, not a validated recommendation for the thin closed shell.
+
+dish_smoothing_paths.m resolves the input and dependency directories relative
+to this code, rather than the working directory.
+
+Inputs and dependencies
+-----------------------
+By default the MATLAB drivers read:
+  <project>/data/dish/<stem>/<stem>_order4.go3
+  <project>/data/dish/<stem>/<stem>_scaffold.gidmsh
+
+Set DISH_MESH_ROOT to an absolute directory containing the stem directories
+to use another mesh location. Meshes, scratch files, and generated results
+under the project's data directory are ignored by Git.
+
+SurfSmooth3D must provide matlab/setup_surfsmooth3d.m, the surfsmooth3d MATLAB
+package, its compiled dependencies, and the two-stage/recovery APIs used in
+these scripts. Set SURFSMOOTH3D_ROOT to its absolute repository directory.
+Otherwise the default is <NRCCIE_DEPENDENCY_ROOT>/SurfSmooth3D, where
+NRCCIE_DEPENDENCY_ROOT defaults to the parent of this project. No dependency
+is downloaded or installed automatically.
+
+Use
+---
+After installing the required smoother and making the mesh inputs available:
+
+  addpath('/path/to/hirax_maxwell/src/dish/experimental')
+  run_smooth(1,0.25,12,4)
+
+The shell launcher can be called from any directory. Set MATLAB_BIN if MATLAB
+is not on PATH, for example:
+
+  MATLAB_BIN=/Applications/MATLAB_R2026a.app/bin/matlab \
+    /path/to/hirax_maxwell/src/dish/experimental/launch.sh 1 0.25 12 4 50
+
+The launcher validates all numerical arguments before constructing its MATLAB
+batch command. An explicit rlam is appended to both the log and result tags,
+so different rlam overrides do not reuse the same configuration path.
+
+Results
+-------
+run_smooth writes into <mesh-root>/<stem>/smooth/<configuration>/, including
+the manifest, run log, and any generated go3 or failure/recovery diagnostics.
+The historical driver writes into <mesh-root>/<stem>/smooth/.
+
+Each invocation creates a unique scratch directory under smooth/work/ and
+does not delete another run's scratch directory. Existing result files for
+the same configuration may be replaced; run duplicate configurations in
+separate mesh roots if they must be retained. Scratch diagnostics are left
+available for inspection. A status of "solved" records that the smoother
+returned; inspect the separate validity result before accepting a mesh.
+
+Provenance
+----------
+Imported from Dropbox/hirax/geometry/dish/mesh/out:
+  dish_fd023_m/run_smooth.m
+  dish_fd023_m/launch.sh
+  dish_fd021_m_rimfree/smooth/smooth_dish_rimfree.m
+
+The numerical algorithms and original experimental comments were preserved.
+Import changes are path configuration, input checks, independent scratch
+directories, explicit rlam tags, and portable shell launching.

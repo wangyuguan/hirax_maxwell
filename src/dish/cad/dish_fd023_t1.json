@@ -1,0 +1,23 @@
+{
+  "aperture_radius": 300.0,
+  "area_inner_exact": 354503.3573403848,
+  "area_outer_exact": 356206.14178699703,
+  "area_rim_exact": 1887.2675876138615,
+  "area_total_exact": 712596.7667149957,
+  "diameter": 600.0,
+  "f_ratio": 0.23,
+  "focal_length": 138.0,
+  "offset_bezier_degree": 17,
+  "offset_bezier_max_deviation": 2.7491450851307587e-07,
+  "rim_inner_r": 300.0,
+  "rim_inner_z": 25.043478260869563,
+  "rim_outer_r": 300.73593101176175,
+  "rim_outer_z": 24.366421730048682,
+  "step_stem": "dish_fd023_t1",
+  "units": "cm",
+  "vertex_z_inner": -138.0,
+  "vertex_z_outer": -139.0,
+  "wall_thickness": 1.0,
+  "wall_thickness_max": 1.0000002576762852,
+  "wall_thickness_min": 0.9999997250855481
+}
