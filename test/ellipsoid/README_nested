@@ -1,0 +1,155 @@
+Nested sphere scattering example
+================================
+
+Uses the existing project dependencies initialized by startup.m: the
+fmm3dbie-hirax-dev MATLAB interface and its native quadrature routines,
+plus Chunkie geometry support. The example uses k=2*pi, epsilon=mu=1,
+and time dependence exp(-i*omega*t). Lengths are in wavelengths.
+
+Nested sphere interfaces: compressed small body coupled to a physical BIE
+  Run from the repository root:
+
+    run('startup.m')
+    result = test_nested_ellipsoid_scattering(12,20,1e-6);
+
+  Arguments are physical patch order, outer sphere polar order, and joint-ID
+  tolerance. The small sphere uses polar order max(12,nproxy-4). The test
+  uses k=2*pi and two physically disjoint PEC ellipsoids:
+
+    small: semiaxes [0.12,0.10,0.08], center [0,0,0]
+    large: semiaxes [0.35,0.28,0.22], center [0.90,0,0]
+    small sphere: radius 0.30, center [0,0,0]
+    outer sphere: radius 1.20, center [0.45,0,0]
+
+  The large body lies outside the small sphere. The outer sphere contains
+  both physical bodies and the entire small sphere. Only the interfaces are
+  nested: the physical bodies do not overlap. The outer scattering matrix
+  represents the coupled pair, including repeated reflections.
+
+  First build the small body's interface from its physical matrix A_s:
+
+    S_s = C_s(I_s,:)*(A_s\B_s(:,I_s))
+    a_s = U_s'*din_s
+    b_s = S_s*a_s
+    dout_s = U_s*b_s.
+
+  The remaining construction accesses the small component only through its
+  sphere geometry, U_s, and S_s. Its physical density is recovered later only
+  for diagnostic comparisons. With q_d denoting the large body's density,
+  define the two sphere/physical coupling maps:
+
+    G_sd = U_s'*L_s*K(large -> small sphere)
+    G_ds = R_d*Q(small sphere -> large)*U_s.
+
+  K evaluates NRCCIE densities, Q is the outward Stratton-Chu representation,
+  L extracts the four tangential traces, and R forms the incident-field RHS.
+  The small sphere's exterior formula applies on the large physical body.
+  Its response is coupled to the large physical BIE through
+
+    H = [A_d,       -G_ds;
+         -S_s*G_sd, identity]
+    H*[q_d;b_s] = [R_d*EHinc_d; S_s*U_s'*din_s].
+
+  The full H solve includes feedback in both directions. No propagation of
+  an outgoing outer-sphere field into its interior is used for this coupling.
+
+  For the outer interface, define the incoming and outgoing maps
+
+    B_o = [-R_d*Q(outer -> large);
+           -S_s*U_s'*L_s*Q(outer -> small sphere)]
+    C_o = [L_o*K(large -> outer), L_o*Q(small sphere -> outer)*U_s].
+
+  The minus signs in B_o reconstruct a regular incident field inside the
+  outward-oriented outer sphere. Joint ID selects the outer DOFs I_o, then
+
+    S_o = C_o(I_o,:)*(H\B_o(:,I_o)).
+
+  Both S_s and S_o are square, with four DOFs per retained sphere point. No
+  full sphere-to-sphere scattering matrix is constructed at either stage.
+  The trace ordering is [Eu,Ev,Hu,Hv] per node in unit tangent frames, without
+  weights; source quadrature weights are included in the evaluation maps.
+  Incoming coefficients U'*din combine the full sphere trace and are not
+  incident samples din(I). Outgoing coefficients are the retained field
+  samples, and U reconstructs the complete outgoing trace. For a new outer
+  incident trace din and targets outside result.outer.proxy:
+
+    a = result.outer.input_projection*din;
+    b = result.outer.Scat*a;
+    Q = stratton_chu_matrix(result.outer.proxy,targets,result.zk);
+    EHsc = reshape(Q*(result.outer.output_interpolation*b),6,[]);
+
+  Both interfaces use maxwell_multilevel_row_id with blocks of four rows per
+  sphere point. It splits points spatially, performs deterministic local IDs,
+  then merges and recompresses only child skeletons. Kernel callbacks stream
+  the normalized joint rows [B'/norm(B,'fro'),C/norm(C,'fro')]; normalization
+  and operator-error checks are also streamed. No randomized sketch or
+  preassembled global B/C input is required. Callbacks assemble candidate
+  blocks only, but a root candidate block can contain all points when
+  compression is weak. Full interpolation matrices are retained for this
+  prototype. Physical matrices and H are dense; this is a small coupling
+  verification, not a scalable dish solve. Local tol/nlevels is a heuristic,
+  and actual joint and separate B/C residuals are recorded.
+
+  Validation uses 12 new linear-polarization plane waves, two circular
+  combinations, and exterior electric/magnetic dipoles. A separate full
+  two-body corrected NRCCIE solve provides the same-discretization reference.
+  Its cross blocks retain charge-continuity terms; the field-only expression
+  -R*K is not substituted for those true NRCCIE blocks. Separate diagnostics
+  quantify charge-continuity compatibility on solved densities and compare a
+  field-coupled physical system with that full reference. Hybrid residuals,
+  sphere traces, and exterior E/H errors distinguish the small-interface
+  approximation, outer-interface approximation, and Green-representation
+  error. A control omitting feedback on the small body checks that coupling
+  matters. These comparisons do not establish physical mesh convergence.
+
+  The result contains small and outer interface data, geometry, errors, timing,
+  and target fields. Data are saved before the final pass assertion, so a
+  failed check can also be inspected. The default output files are
+
+    test/results/nested_ellipsoid_p12_q20_1em06.mat
+    test/results/nested_ellipsoid_p12_q20_1em06.png
+
+  The plot shows an equatorial geometry section and errors against the full
+  corrected NRCCIE reference. Other arguments change the filename tag.
+
+  Measured results (physical order 12, joint-ID tolerance 1e-6):
+
+    outer polar order                       20             28
+    small sphere points / skeletons         512 / 290      1152 / 311
+    outer sphere points / skeletons         800 / 277      1568 / 301
+    small scattering matrix size            1160 x 1160    1244 x 1244
+    outer scattering matrix size            1108 x 1108    1204 x 1204
+    hybrid system dimension                 4202           4286
+    full physical system dimension          6084           6084
+    max B/C relative Frobenius error         2.98e-7        2.82e-7
+    hybrid residual in full NRCCIE           4.18e-7        4.18e-7
+    hybrid exterior E/H error                3.75e-7        3.75e-7
+    outer compressed exterior E/H error      4.64e-5        2.74e-6
+    feedback-omitted exterior E/H error      5.36e-2        5.36e-2
+    total time, four MATLAB threads          149.8 s        260.9 s
+
+  Exterior errors are the worst relative 2-norm over 16 incident fields,
+  using all six E/H components at 144 targets on radii 1.6, 2.4, and 4.0
+  about the outer sphere center. For the refined sphere, the separate E/H
+  errors are 3.68e-6 and 1.32e-6. Per-target-radius errors are 2.77e-6,
+  2.70e-6, and 2.69e-6. To reproduce that run:
+
+    result = test_nested_ellipsoid_scattering(12,28,1e-6);
+
+  Sphere refinement removes most of the closest-target quadrature error.
+  The uncompressed full-reference trace evaluated through Stratton-Chu has
+  error 2.75e-6 on the refined sphere, so the remaining discrepancy cannot
+  be attributed to ID alone. Physical discretization and Green-representation
+  compatibility remain distinct from the recorded B/C compression errors.
+  Physical patch order is held fixed; this is not a mesh-convergence study.
+
+  The largest joint callback blocks were 356/358 points (small/outer) at
+  order 20 and 408/391 points at order 28, smaller than each full sphere.
+  Neither run assembled the full sphere scattering matrix before selection.
+
+  Both native computations saved their results and passed the numerical
+  assertions before a MATLAB shutdown crash. A separate MATLAB process,
+  without loading the native BIE libraries, reloaded both files, checked
+  dimensions, skeleton interpolation identities, recorded errors, and a new
+  application of the saved outer interface; it passed and exited normally.
+  The native process-exit failures are not counted as clean executions.

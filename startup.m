@@ -10,4 +10,5 @@ addpath(genpath(fullfile(dependency_root,'FLAM')))
 addpath(genpath(fullfile(hirax_root,'src')))
 addpath(fullfile(dependency_root,'strong-skel'))
 addpath(fullfile(hirax_root,'test'))
+addpath(fullfile(hirax_root,'test','ellipsoid'))
 clear hirax_root dependency_root pth dir
