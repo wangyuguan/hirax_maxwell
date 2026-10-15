@@ -1,5 +1,5 @@
 function [nodes,U,info] = maxwell_multilevel_row_id(P,rowfun,tol,max_leaf_points)
-% MAXWELL_MULTILEVEL_ROW_ID Deterministic joint ID on sphere point blocks.
+% MAXWELL_MULTILEVEL_ROW_ID Deterministic joint ID on surface point blocks.
 %
 %  Input arguments:
 %    * P: surface geometry with P.r of size 3 by P.npts

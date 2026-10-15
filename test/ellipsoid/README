@@ -1,0 +1,447 @@
+Square Maxwell scattering matrix on an enclosing sphere
+=======================================================
+
+Run
+  From the repository root in MATLAB:
+
+    run('startup.m')
+    result = test_ellipsoid_scattering(16,20);
+
+  The arguments are the ellipsoid patch order and the sphere polar order.
+  Use (8,16) for a faster, lower-accuracy check. Results, including Scat, are
+  saved to test/results/ellipsoid_p<order>_q<proxy_order>.mat.
+
+Geometry and conventions
+  A perfectly conducting ellipsoid has semiaxes [0.5,0.4,0.3]. With k=2*pi
+  its largest diameter is one wavelength. The enclosing sphere has radius 1.
+  Units are normalized to epsilon=mu=1 with time dependence exp(-i*omega*t).
+  For physical H in other units, use impedance-scaled H in this interface.
+
+  At each of m sphere nodes, store four tangential field components:
+
+    d = [Eu_1; Ev_1; Hu_1; Hv_1; Eu_2; Ev_2; Hu_2; Hv_2; ...].
+
+  Both input and output use exactly the same nodes and unit tangent frames.
+  Scat is therefore 4*m by 4*m. These are field values, without quadrature
+  weights; the evaluation matrices include the source weights. At order 20,
+  m=800 and Scat is 3200 by 3200 (about 164 MB in complex double precision).
+
+Construction
+  A is the existing corrected NRCCIE operator on the actual ellipsoid.
+  R maps incident E,H samples there to the PEC right hand side.
+  L extracts tangential E,H on the sphere.
+  Q is the Stratton-Chu matrix from sphere traces to separated target fields.
+  K evaluates the physical NRCCIE density on the sphere.
+
+    B = R*(-Q(sphere -> ellipsoid))
+    C = L*K(ellipsoid -> sphere)
+    Scat = C*(A\B)
+
+  The minus sign in B is essential: the outward-oriented Green representation
+  reconstructs a regular incident field with a minus sign inside the sphere.
+  Outside, Q reconstructs an outgoing field with a plus sign.
+
+  Only the physical NRCCIE is solved. No first-kind integral equation on the
+  sphere is solved. The demo forms/factors A densely because this is a small
+  ellipsoid; the interface does not require dense A for a larger geometry.
+
+Apply to a new incident field
+  Let Einc,Hinc be 3-by-m arrays sampled at result.proxy.r, with sources
+  outside the enclosing sphere. Then:
+
+    P = result.proxy;
+    L = maxwell_trace_matrix(P);
+    din = L*reshape([Einc;Hinc],[],1);
+    dout = result.Scat*din;
+    T.r = targets;                         % 3-by-nt, outside the sphere
+    Q = stratton_chu_matrix(P,T,result.zk);
+    EH = reshape(Q*dout,6,[]);
+    Esc = EH(1:3,:);
+    Hsc = EH(4:6,:);
+
+  This yields scattered fields. Add the original incident fields at targets
+  to obtain total fields. Targets need not lie on a sphere. The current
+  quadrature is intended for separated targets; targets very close to the
+  proxy require finer or special quadrature.
+
+  Four sampled trace components are redundant coordinates for physically
+  compatible Maxwell fields. Scat is square but need not be invertible.
+  It maps incident traces to scattered traces; it is not a change of basis.
+
+Stratton-Chu implementation
+  Set J=n x H and M=-n x E on the sphere. With G=exp(ik*r)/(4*pi*r),
+
+    E = ik*(S J + grad div S J/k^2) - curl S M,
+    H = curl S J + ik*(S M + grad div S M/k^2).
+
+  stratton_chu_matrix evaluates these kernels directly, including the Hessian
+  of G. No numerical surface differentiation of sampled fields is needed.
+  This is the tangential-current form of the Maxwell Green representation.
+
+Validation
+  Three new plane waves and one exterior electric dipole are checked. None
+  serves as a training field. Targets sample 80 directions at each radius
+  2, 4, and 8 wavelengths. Reported relative Euclidean errors distinguish:
+
+    incoming      sphere trace -> incident field on physical ellipsoid
+    trace         Scat output vs direct NRCCIE scattered sphere trace
+    target        Scat + Stratton-Chu vs direct NRCCIE target evaluation
+    stratton_chu  direct scattered sphere trace -> target vs direct BIE
+    bie_residual  residual of the physical density solve
+
+  An analytic interior dipole additionally checks the outward Green identity
+  independently of the BIE. Physical mesh refinement and the separate
+  check_ellipsoid_reference function assess physical discretization error.
+  Increasing proxy order alone does not eliminate physical discretization
+  error, including discrete current/charge compatibility error.
+
+Measured results (2026-10-12)
+  Maxima over the four incident fields, using the direct physical BIE field
+  as the target comparison:
+
+    physical order  sphere order    incoming       trace          target
+          8              16         4.18e-9        2.18e-9        6.05e-4
+         12              20         1.57e-11       7.65e-12       5.58e-6
+         16              20         1.60e-11       2.75e-12       1.60e-7
+
+  The last construction used 1734 physical nodes (5202 NRCCIE unknowns),
+  took 45.4 seconds with one MATLAB computation thread, and had a maximum
+  relative BIE residual of 6.1e-15. The analytic outgoing-dipole Green
+  identity error was 5.7e-12. See test/results/ellipsoid_validation.png.
+
+  check_ellipsoid_reference([],16) independently solved the +x incident
+  plane wave using em3d.pec.solver/eval with oversampled quadrature. GMRES
+  took 42 iterations with residual 6.48e-12. Compared with that reference,
+  Scat plus Stratton-Chu had relative E/H differences of 3.35e-7/3.25e-7.
+  These comparisons do not establish a rigorous continuous-solution error
+  bound. An additional order-20 reference attempt crashed before producing
+  its result, so no order-20 convergence claim is made.
+
+  On this Mac, the three matrix-construction runs saved their results and
+  then crashed in MATLAB's thread cleanup at process exit. This reproduces the pre-existing
+  MEX environment issue; it is not a clean process exit. A separate MATLAB
+  process loaded all saved results, passed geometry/frame/error assertions,
+  checked the source files, rendered the figure, and exited normally.
+
+Files
+  test_ellipsoid_scattering.m   complete construction and new-field tests
+  maxwell_sphere.m              sphere quadrature and tangent frames
+  maxwell_trace_matrix.m        Cartesian E,H -> four tangential components
+  nrccie_rhs_matrix.m           Cartesian incident E,H -> physical BIE RHS
+  stratton_chu_matrix.m         sphere trace -> Cartesian E,H at targets
+  check_ellipsoid_reference.m   independent library solver/evaluator check
+
+Shared incoming/outgoing skeleton points
+  After constructing the full matrix, run:
+
+    compressed = test_ellipsoid_shared_skeleton(1e-8);
+
+  This separate test loads ellipsoid_p16_q20.mat. It makes incoming trace
+  samples from 384 plane-wave directions (both transverse polarizations) and
+  96 exterior source positions at radius 2.5 (three electric and three
+  magnetic dipoles each). Outgoing samples are the corresponding scattered
+  responses. Each incoming/outgoing column is normalized in the sphere
+  quadrature norm before forming the joint sample matrix [Fin,Fout].
+
+  maxwell_shared_row_id applies block-pivoted QR to that matrix's adjoint.
+  Each pivot selects a complete sphere point with all four field components.
+  A least-squares interpolation fit gives T with identity rows at the selected
+  DOFs I. Both incoming and outgoing traces satisfy d approximately T*d(I).
+  The least-squares fit constructs interpolation coefficients; no physical
+  first-kind boundary-integral equation is involved.
+
+    Scat_small = Scat_full(I,:)*T;
+    dout_I = Scat_small*din_I;
+    dout = T*dout_I;
+    field = (Q*T)*dout_I;
+
+  Scat_small maps actual incoming field values on the selected points to
+  scattered field values on exactly those same points. Its size is 4*r by
+  4*r for r selected points. The skeleton values do not serve as quadrature
+  source strengths on a sparsely sampled sphere: the target map uses Q*T,
+  which retains the original quadrature and the outgoing reconstruction.
+
+  To apply a saved compressed result to new incident E,H samples at its
+  skeleton.r (3-by-r arrays):
+
+    din_I = maxwell_trace_matrix(compressed.skeleton)*reshape([Einc;Hinc],[],1);
+    dout_I = compressed.Scat*din_I;
+    Q = stratton_chu_matrix(compressed.proxy,targets,compressed.zk);
+    EH = reshape((Q*compressed.interpolation)*dout_I,6,[]);
+
+  Here targets is a struct with targets.r. For the saved test targets,
+  compressed.target_matrix already stores Q*T. No incident samples at the
+  discarded sphere nodes are needed during application.
+
+  The prototype reuses the full scattering matrix to isolate compression
+  error. The algebra also permits direct construction C(I,:)*(A\(B*T)),
+  which would avoid forming Scat_full; that construction is not implemented
+  in this compression test.
+
+Measured shared-skeleton results (2026-10-12)
+  At training ID tolerance 1e-8, the joint selection retained 310 of 800
+  sphere points, yielding a 1240-by-1240 scattering matrix. The separately
+  stored interpolation matrix is 3200-by-1240. Joint training residual was
+  4.83e-9 and the largest interpolation entry was 2.01.
+
+  Checks used 268 held-out fields: the original four BIE-tested fields,
+  64 new directions with both linear polarizations, their 64 circular
+  combinations, and 72 electric/magnetic dipoles at new positions with
+  radii 2.5, 3, and 4. The circular fields test complex-valued application
+  but do not increase the span of the held-out plane-wave space.
+
+    incoming trace reconstruction              1.29e-7
+    outgoing trace reconstruction              1.10e-8
+    complete scattering trace vs full matrix   1.11e-7
+    added target error from compression         1.11e-7
+
+  These are maximum relative Euclidean errors across the held-out fields.
+  The original four comparisons against direct BIE evaluation remained
+  below 1.60e-7 with compression. The training tolerance controls the joint
+  sample residual; it is not an all-fields error bound. Sources much closer
+  to the proxy require a richer training space and new validation.
+
+  Results and the common-node/error plot are saved as
+    test/results/ellipsoid_shared_skeleton_1em08.mat
+    test/results/ellipsoid_shared_skeleton_1em08.png
+
+  This computation uses saved data and MATLAB kernels without native BIE
+  calls; the initial shared-skeleton run completed with a normal exit.
+
+Direct joint compression of B and C, without a full scattering matrix
+  Run from the repository root:
+
+    run('startup.m')
+    compressed = test_ellipsoid_bc_skeleton(1e-6,16,20);
+
+  test_ellipsoid_bc_skeleton constructs the compressed response directly
+  from the two kernel maps. It does not load an existing scattering matrix.
+  Its ID uses the normalized joint matrix
+
+    F = [B'/norm(B,'fro'), C/norm(C,'fro')].
+
+  A common block row ID gives F approximately U*F(I,:), where I contains
+  all four components of each selected sphere point. Consequently,
+
+    B approximately B(:,I)*U'
+    C approximately U*C(I,:).
+
+  Once I is selected, the only response matrix constructed is
+
+    Scat_small = C(I,:)*(A\B(:,I)).
+
+  This needs one factorization of the physical BIE and 4*r right-hand sides
+  for r sphere skeleton points. Selection itself needs no BIE solutions.
+  Direct solves for individual test fields provide the validation reference;
+  the full sphere-to-sphere scattering matrix is never formed, even there.
+
+  The compressed interface is different from the sampled-field interface:
+
+    a = U'*din;                  incoming projection coefficients
+    b = Scat_small*a;            outgoing field samples at selected nodes
+    dout = U*b;                  complete outgoing sphere trace
+    field = (Q*U)*b;             Stratton-Chu evaluation at targets
+
+  Both sides use the same geometric point indices and have size 4*r.
+  Incoming a combines the full sphere data; it is not din(I). The saved
+  input_projection and output_interpolation matrices make this distinction
+  explicit. A pure column ID of B does not provide a pointwise interpolant
+  for physically compatible incoming traces.
+
+  If actual incoming field samples at the selected points are required,
+  add a regular incident-field basis Fin and do a joint row ID of [Fin,C].
+  Its lift V gives the sampled-field map C(I,:)*(A\(B*V)). That route also
+  avoids forming a full scattering matrix but uses extra incident-space
+  information. The earlier shared-skeleton test demonstrates this type of
+  sampled-field interface with outgoing response samples.
+
+  The ellipsoid prototype still assembles dense A, B, and C. Avoiding full
+  B/C storage for a large physical mesh requires sampled or blockwise
+  kernel access and a scalable physical solver; this test addresses the
+  full-scattering-matrix dependency specifically.
+
+Measured direct B/C results (2026-10-12)
+  All 48 validation fields were independent of the ID: 32 plane waves with
+  different directions/polarizations, four complex-polarization combinations,
+  and 12 electric/magnetic dipoles outside the sphere. Targets used 80
+  directions at each radius 2, 4, and 8. No full Scat was formed for either
+  construction or validation.
+
+    ID tolerance  points   square matrix   added target error  vs direct BIE
+       1e-8         492     1968 x 1968         1.46e-10          3.53e-7
+       1e-6         323     1292 x 1292         2.93e-8           3.53e-7
+
+  Errors are the largest relative Euclidean errors over the test fields.
+  The uncompressed per-field Green-chain reference also differed from direct
+  physical BIE evaluation by 3.53e-7. The default tolerance is therefore 1e-6
+  for this example. At that tolerance, the B/C operator residuals were
+  4.82e-7/4.93e-7, incoming RHS compression error 2.71e-7, and outgoing trace
+  interpolation error 1.50e-7. Selection took 75.0 s; physical quadrature and
+  factorization took 17.0 s; 1292 selected RHS solves took 1.6 s (four threads).
+
+  Saved results:
+    test/results/ellipsoid_bc_skeleton_1em06.mat
+    test/results/ellipsoid_bc_skeleton_1em08.mat
+
+  Application to a new incident trace din on all 800 proxy nodes:
+
+    a = compressed.input_projection*din;
+    b = compressed.Scat*a;
+    EH = reshape(compressed.target_matrix*b,6,[]);
+
+  target_matrix applies to the saved targets. For new separated targets use
+  stratton_chu_matrix(compressed.proxy,targets,compressed.zk) multiplied by
+  compressed.output_interpolation. The interpolation/projection maps occupy
+  additional storage beyond the small square matrix.
+
+  Both native runs saved results and passed their numerical assertions before
+  the existing MATLAB/MEX teardown crash. Saved results are checked separately
+  without native BIE calls; process-exit failure is not counted as a clean run.
+
+Nested sphere interfaces: compressed small body coupled to a physical BIE
+  Run from the repository root:
+
+    run('startup.m')
+    result = test_nested_ellipsoid_scattering(12,20,1e-6);
+
+  Arguments are physical patch order, outer sphere polar order, and joint-ID
+  tolerance. The small sphere uses polar order max(12,nproxy-4). The test
+  uses k=2*pi and two physically disjoint PEC ellipsoids:
+
+    small: semiaxes [0.12,0.10,0.08], center [0,0,0]
+    large: semiaxes [0.35,0.28,0.22], center [0.90,0,0]
+    small sphere: radius 0.30, center [0,0,0]
+    outer sphere: radius 1.20, center [0.45,0,0]
+
+  The large body lies outside the small sphere. The outer sphere contains
+  both physical bodies and the entire small sphere. Only the interfaces are
+  nested: the physical bodies do not overlap. The outer scattering matrix
+  represents the coupled pair, including repeated reflections.
+
+  First build the small body's interface from its physical matrix A_s:
+
+    S_s = C_s(I_s,:)*(A_s\B_s(:,I_s))
+    a_s = U_s'*din_s
+    b_s = S_s*a_s
+    dout_s = U_s*b_s.
+
+  The remaining construction accesses the small component only through its
+  sphere geometry, U_s, and S_s. Its physical density is recovered later only
+  for diagnostic comparisons. With q_d denoting the large body's density,
+  define the two sphere/physical coupling maps:
+
+    G_sd = U_s'*L_s*K(large -> small sphere)
+    G_ds = R_d*Q(small sphere -> large)*U_s.
+
+  K evaluates NRCCIE densities, Q is the outward Stratton-Chu representation,
+  L extracts the four tangential traces, and R forms the incident-field RHS.
+  The small sphere's exterior formula applies on the large physical body.
+  Its response is coupled to the large physical BIE through
+
+    H = [A_d,       -G_ds;
+         -S_s*G_sd, identity]
+    H*[q_d;b_s] = [R_d*EHinc_d; S_s*U_s'*din_s].
+
+  The full H solve includes feedback in both directions. No propagation of
+  an outgoing outer-sphere field into its interior is used for this coupling.
+
+  For the outer interface, define the incoming and outgoing maps
+
+    B_o = [-R_d*Q(outer -> large);
+           -S_s*U_s'*L_s*Q(outer -> small sphere)]
+    C_o = [L_o*K(large -> outer), L_o*Q(small sphere -> outer)*U_s].
+
+  The minus signs in B_o reconstruct a regular incident field inside the
+  outward-oriented outer sphere. Joint ID selects the outer DOFs I_o, then
+
+    S_o = C_o(I_o,:)*(H\B_o(:,I_o)).
+
+  Both S_s and S_o are square, with four DOFs per retained sphere point. No
+  full sphere-to-sphere scattering matrix is constructed at either stage.
+  The trace ordering is [Eu,Ev,Hu,Hv] per node in unit tangent frames, without
+  weights; source quadrature weights are included in the evaluation maps.
+  Incoming coefficients U'*din combine the full sphere trace and are not
+  incident samples din(I). Outgoing coefficients are the retained field
+  samples, and U reconstructs the complete outgoing trace. For a new outer
+  incident trace din and targets outside result.outer.proxy:
+
+    a = result.outer.input_projection*din;
+    b = result.outer.Scat*a;
+    Q = stratton_chu_matrix(result.outer.proxy,targets,result.zk);
+    EHsc = reshape(Q*(result.outer.output_interpolation*b),6,[]);
+
+  Both interfaces use maxwell_multilevel_row_id with blocks of four rows per
+  sphere point. It splits points spatially, performs deterministic local IDs,
+  then merges and recompresses only child skeletons. Kernel callbacks stream
+  the normalized joint rows [B'/norm(B,'fro'),C/norm(C,'fro')]; normalization
+  and operator-error checks are also streamed. No randomized sketch or
+  preassembled global B/C input is required. Callbacks assemble candidate
+  blocks only, but a root candidate block can contain all points when
+  compression is weak. Full interpolation matrices are retained for this
+  prototype. Physical matrices and H are dense; this is a small coupling
+  verification, not a scalable dish solve. Local tol/nlevels is a heuristic,
+  and actual joint and separate B/C residuals are recorded.
+
+  Validation uses 12 new linear-polarization plane waves, two circular
+  combinations, and exterior electric/magnetic dipoles. A separate full
+  two-body corrected NRCCIE solve provides the same-discretization reference.
+  Its cross blocks retain charge-continuity terms; the field-only expression
+  -R*K is not substituted for those true NRCCIE blocks. Separate diagnostics
+  quantify charge-continuity compatibility on solved densities and compare a
+  field-coupled physical system with that full reference. Hybrid residuals,
+  sphere traces, and exterior E/H errors distinguish the small-interface
+  approximation, outer-interface approximation, and Green-representation
+  error. A control omitting feedback on the small body checks that coupling
+  matters. These comparisons do not establish physical mesh convergence.
+
+  The result contains small and outer interface data, geometry, errors, timing,
+  and target fields. Data are saved before the final pass assertion, so a
+  failed check can also be inspected. The default output files are
+
+    test/results/nested_ellipsoid_p12_q20_1em06.mat
+    test/results/nested_ellipsoid_p12_q20_1em06.png
+
+  The plot shows an equatorial geometry section and errors against the full
+  corrected NRCCIE reference. Other arguments change the filename tag.
+
+  Measured results (physical order 12, joint-ID tolerance 1e-6):
+
+    outer polar order                       20             28
+    small sphere points / skeletons         512 / 290      1152 / 311
+    outer sphere points / skeletons         800 / 277      1568 / 301
+    small scattering matrix size            1160 x 1160    1244 x 1244
+    outer scattering matrix size            1108 x 1108    1204 x 1204
+    hybrid system dimension                 4202           4286
+    full physical system dimension          6084           6084
+    max B/C relative Frobenius error         2.98e-7        2.82e-7
+    hybrid residual in full NRCCIE           4.18e-7        4.18e-7
+    hybrid exterior E/H error                3.75e-7        3.75e-7
+    outer compressed exterior E/H error      4.64e-5        2.74e-6
+    feedback-omitted exterior E/H error      5.36e-2        5.36e-2
+    total time, four MATLAB threads          149.8 s        260.9 s
+
+  Exterior errors are the worst relative 2-norm over 16 incident fields,
+  using all six E/H components at 144 targets on radii 1.6, 2.4, and 4.0
+  about the outer sphere center. For the refined sphere, the separate E/H
+  errors are 3.68e-6 and 1.32e-6. Per-target-radius errors are 2.77e-6,
+  2.70e-6, and 2.69e-6. To reproduce that run:
+
+    result = test_nested_ellipsoid_scattering(12,28,1e-6);
+
+  Sphere refinement removes most of the closest-target quadrature error.
+  The uncompressed full-reference trace evaluated through Stratton-Chu has
+  error 2.75e-6 on the refined sphere, so the remaining discrepancy cannot
+  be attributed to ID alone. Physical discretization and Green-representation
+  compatibility remain distinct from the recorded B/C compression errors.
+  Physical patch order is held fixed; this is not a mesh-convergence study.
+
+  The largest joint callback blocks were 356/358 points (small/outer) at
+  order 20 and 408/391 points at order 28, smaller than each full sphere.
+  Neither run assembled the full sphere scattering matrix before selection.
+
+  Both native computations saved their results and passed the numerical
+  assertions before a MATLAB shutdown crash. A separate MATLAB process,
+  without loading the native BIE libraries, reloaded both files, checked
+  dimensions, skeleton interpolation identities, recorded errors, and a new
+  application of the saved outer interface; it passed and exited normally.
+  The native process-exit failures are not counted as clean executions.

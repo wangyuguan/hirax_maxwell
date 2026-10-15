@@ -1,6 +1,7 @@
 /data/
 /diagnostics/
 /test/results/
+/leaves/test/results/
 /slurm_jobs/
 *.asv
 *.log

@@ -1,0 +1,323 @@
+Toy antenna-array rehearsal
+===========================
+
+This experiment rehearses the complete nested-interface construction on
+smooth closed PEC surfaces. One station consists of four small ellipsoids
+(the toy leaves) above one oblate ellipsoid (the toy dish). Four translated
+copies form a 2-by-2 array. It tests symmetry reuse, compression, feedback,
+and reuse of a precomputed station response; it does not model paraboloid
+focusing, feed ports, material losses, or the ground's electromagnetic response.
+
+Run from the repository root after building the usual project dependencies:
+
+  run('startup.m')
+  result = test_toy_array_scattering(8,28,1e-5,true);
+
+The arguments are physical patch order, proxy polar order, joint-ID
+tolerance, and whether to run the four-station array stage. The proxy has
+nproxy polar nodes and 2*nproxy azimuthal nodes. Both interfaces use this
+order. The main function defaults to (8,28,1e-5,true).
+
+A cheaper plumbing check is:
+
+  test_toy_array_scattering(4,16,1e-4,false);
+
+That coarse run is expected to be inaccurate and can fail the final accuracy
+assertion. It still saves its errors and interfaces under test/results before
+asserting. A small ID tolerance does not compensate for coarse physical or
+proxy quadrature. The refined command above is a run configuration, not a
+claim that physical mesh convergence has been established.
+
+Geometry and conventions
+------------------------
+
+toy_antenna_array_geometry(norder) returns model and physical. The latter
+contains body, leaves{1:4}, feed, and station surfers for ONE station. The
+leaves are in counterclockwise order, each built by rotating the same base
+mesh and its tangent frame. physical.feed merges these four surfaces;
+physical.station merges the body first and the feed second.
+
+Lengths are in wavelengths, lambda=1, k=2*pi. The body's horizontal diameter
+is 1, and its bottom is 1/6 above z=0. Scaling the diameter to 6 m therefore
+gives the provisional 1 m clearance from the HIRAX email correspondence.
+This preserves the geometric height/diameter ratio, not the real array's
+electrical size at its operating frequencies. The inner sphere surrounds
+only the leaves. The outer oblate ellipsoid encloses the whole station and
+the inner sphere. The outer proxies are disjoint and remain above z=0.
+The plane z=0 is only a location reference in this free-space experiment.
+
+The fields use exp(-i*omega*t), epsilon=mu=1. Physical NRCCIE unknowns are
+interleaved [ju,jv,rho] per physical node. Proxy data are interleaved
+d=[Eu,Ev,Hu,Hv] per proxy node, in outward-oriented orthonormal tangent
+frames. These trace values do not include quadrature weights.
+
+The symbols below have the following meanings:
+
+  K(S -> T): evaluate E and H on targets T from NRCCIE density on S.
+  Q(P -> T): outward Stratton-Chu evaluation from proxy trace on P to T.
+  L_P:       extract the four tangential components on P from E and H.
+  R_S:       form the NRCCIE incident-field right-hand side on S.
+
+Q includes source quadrature weights. It reproduces an outgoing field
+outside P. For an incident field regular throughout the interior of P,
+-Q reproduces that incident field inside P. Neither use requires solving
+a first-kind equivalent-source equation. No on-surface jump evaluation is
+used in these proxy-to-body or inter-proxy maps.
+
+1. Reuse C4 quadrature and solve the four-leaf system
+-------------------------------------------------
+
+  [A_f,info,cache] = toy_fourfold_system(leaves,opts,eps_quad,run_reference);
+  q_f = cache.solve(rhs);
+
+opts contains zk, alpha, and jump, with optional batch_size. Only one target
+block row of quadrature corrections is computed: one self block and three
+relative interleaf blocks. Rotation gives the other rows, so construction
+uses 4 correction blocks instead of 16. Cartesian gradient corrections are
+rotated as vectors. The existing fourfold_quad_corr_mats and
+fourfold_apply_quad_corr routines perform this reuse. The helper converts
+their clockwise indexing convention to the toy geometry's original order.
+
+Tangent-basis NRCCIE density components do not need an extra Cartesian
+rotation when their tangent frames rotate with the geometry. The helper
+checks this covariance and constructs only four corrected system blocks
+B_0,...,B_3. With leaf indices 0,...,3, the complete system satisfies
+
+  (A_f)_{ij} = B_{(j-i) mod 4}.
+
+It is block circulant. The four Fourier-mode matrices are
+
+  D_m = sum_{r=0}^3 exp(2*pi*i*m*r/4)*B_r,  m=0,...,3.
+
+cache.solve applies fft across the leaf index, solves with four smaller
+LU factors D_m, and applies ifft. This handles arbitrary incident fields
+and arbitrary densities; it does not require a symmetric right-hand side.
+The helper retains the dense A_f for residual checks in this toy experiment,
+but does not factor the full four-leaf matrix.
+
+cache.corrections can be passed directly to fourfold_apply_quad_corr in the
+original leaf ordering. Setting run_reference=true independently builds
+the complete merged-feed quadrature and compares all sixteen blocks and
+the compact correction apply. The main pipeline instead obtains this
+independent comparison from its full five-body station reference, avoiding
+a duplicate feed-reference computation.
+
+2. Construct the square feed scattering matrix on the inner sphere
+----------------------------------------------------------------
+
+For the feed geometry S_f and its enclosing sphere P_f, define
+
+  B_f = -R_f*Q(P_f -> S_f),
+  C_f = L_f*K(S_f -> P_f).
+
+B_f maps regular incoming proxy traces to the physical BIE right-hand side.
+C_f maps solved physical densities to outgoing proxy traces. The function
+maxwell_build_interface(P,mapfun,A,tol,leaf_points,label,solvefun) requests
+blocks of these maps as needed. Here solvefun is the C4 cache.solve above.
+
+A deterministic multilevel row ID of the normalized joint map
+
+  [B_f'/norm(B_f,'fro'), C_f/norm(C_f,'fro')]
+
+selects whole proxy points, retaining all four trace components per point.
+It first compresses spatial subgroups, then combines and recompresses their
+skeletons. There is no randomized sketch. A single interpolation U_f gives
+
+  B_f approximately B_fI*U_f',
+  C_f approximately U_f*C_fI,
+  S_f = C_fI*(A_f inverse applied to B_fI).
+
+I denotes the four-component DOFs of the selected points. The scattering
+matrix S_f is square, of size 4*number_of_skeleton_points. The full proxy
+matrix C_f*(A_f inverse applied to B_f) is never formed. The returned fields
+are Scat, nodes, proxy, input_projection=U_f', and output_interpolation=U_f.
+
+For a new incident trace din_f,
+
+  a_f = U_f'*din_f,
+  b_f = S_f*a_f,
+  dout_f approximately U_f*b_f.
+
+a_f is a projection of the full incident trace, not incident samples at
+the selected points. b_f represents the outgoing trace at the skeleton
+points. Shared points make S_f square without identifying incoming and
+outgoing fields or imposing symmetry on them.
+
+3. Couple the compressed feed to the physical toy dish
+----------------------------------------------------
+
+Let A_d be the corrected body NRCCIE matrix and q_d its physical density.
+The coupling maps are
+
+  G_fd = U_f'*L_f*K(S_d -> P_f),
+  G_df = R_d*Q(P_f -> S_d)*U_f.
+
+The body is outside the feed sphere, so its outgoing exterior evaluation
+is valid on the body. The hybrid system is
+
+  H = [ A_d,         -G_df;
+        -S_f*G_fd,    identity ],
+
+  H*[q_d;b_f] = [ R_d*EHinc_d;
+                  S_f*U_f'*din_f ].
+
+Solving H includes repeated feedback between the body and all four leaves.
+This construction accesses the feed through P_f, U_f, and S_f. The small
+physical density is recovered later only for diagnostic comparisons.
+
+4. Construct one whole-station interface on the outer ellipsoid
+-------------------------------------------------------------
+
+For outer proxy P_o, the incoming and outgoing maps of the hybrid system are
+
+  B_o = [ -R_d*Q(P_o -> S_d);
+          -S_f*U_f'*L_f*Q(P_o -> P_f) ],
+
+  C_o = [ L_o*K(S_d -> P_o), L_o*Q(P_f -> P_o)*U_f ].
+
+The minus signs in B_o reconstruct the incident field inside P_o. Apply
+the same joint point-ID construction to B_o and C_o, then form only
+
+  S_o = C_oI*(H inverse applied to B_oI).
+
+This square S_o includes all feed/body feedback. maxwell_ellipsoid supplies
+the correct ellipsoid normals, tangent frames, and surface weights. The
+outer surface need not be a sphere. Both interfaces retain explicit U for
+this small demonstration; weak compression can still produce large
+candidate blocks. Physical matrices and H are also dense here.
+
+5. Reuse the station matrix and couple the four-station array
+----------------------------------------------------------
+
+toy_array_coupling translates the same proxy and skeletons by the four
+model.station_shifts. The pipeline constructs S_o once, and this helper
+reuses that same matrix for the other three stations. No independent scattering-matrix construction
+is performed for those translated copies. The stations have identical
+orientations; translation leaves their local tangent frames unchanged.
+
+With U=U_o, S=S_o, define the inter-station translation and incident maps
+
+  T_ij = U'*L_i*Q(P_j -> P_i)*U,  i != j,
+  a_i = U'*din_i.
+
+The coupled compressed array equations are
+
+  b_i - S*sum_{j != i} T_ij*b_j = S*a_i.
+
+GMRES solves this compressed system with its identity diagonal and a
+1e-12 relative tolerance. The compressed matrix is explicit in this toy
+implementation, but it is not factored as one large dense LU.
+
+These equations include repeated scattering among all four stations. The twelve
+directed interactions have eight distinct translation offsets on this
+square grid; each offset map is constructed once. Target batches avoid
+forming the full proxy-to-proxy field matrices. For separated targets
+outside all outer proxies, the scattered field is
+
+  EHsc(targets) = sum_i Q(P_i -> targets)*U*b_i.
+
+The target field contains both E and H. Add EHinc at the targets for the
+total field. The current quantities are fields and scattering responses,
+not receiving voltages or port S-parameters.
+
+Independent validation and saved output
+--------------------------------------
+
+The station check solves the independently assembled full five-body
+corrected NRCCIE. It checks C4 quadrature reuse, physical and hybrid solve
+residuals, incident reconstruction, proxy traces, and exterior E/H fields
+for new plane waves and exterior electric and magnetic dipoles. Separate
+Green-representation and B/C-ID errors distinguish proxy quadrature from
+compression error. A control omits feed/body feedback.
+
+For the array, the reference is the TRUE full corrected NRCCIE, including
+its charge-continuity cross terms. nrccie_apply applies it with the FMM;
+GMRES uses the full single-station NRCCIE matrix as a block preconditioner.
+Translated station corrections are reused, and independent inter-station
+near corrections are constructed. This avoids a dense full-array physical
+matrix. It does not substitute the field-only cross expression -R*K for
+the actual NRCCIE blocks. The actual unpreconditioned residual is checked.
+Another control evaluates the four stations without array feedback.
+
+The reported construction savings (4 rather than 16 feed correction
+blocks; one station scattering matrix plus three reuses) describe the
+production construction. They exclude extra independent reference and
+validation computations. The full validation run intentionally does more
+work than would be needed to apply the precomputed interfaces alone.
+
+The main function saves a station checkpoint before array work and saves
+the complete result before its final pass assertion. Files are named
+
+  test/results/toy_array_p<norder>_q<nproxy>_<tol-tag>.mat
+
+For example, the refined command above writes
+
+  test/results/toy_array_p8_q28_1em05.mat.
+
+Useful saved fields include model, feed, outer, symmetry, stats, errors,
+timings, fields, targets, and array. The default acceptance threshold for
+the station/array exterior-field comparison is 5e-3 relative to the same
+physical discretization. The independent reference does not prove physical
+mesh convergence: increasing physical patch order and proxy order is still
+required for a continuum-accuracy study. The plotted ground clearance is
+retained throughout, but ground reflection is not part of these equations.
+
+Measured rehearsal (physical order 8, proxy order 28, ID tolerance 1e-5)
+---------------------------------------------------------------------
+
+  Four-leaf physical unknowns                        5832
+  Fourier-mode factor sizes                   4 x (1458 by 1458)
+  Feed proxy points / retained skeleton points       1568 / 485
+  Feed scattering matrix                            1940 by 1940
+  Full station / hybrid unknowns                     7290 / 3398
+  Outer proxy points / retained skeleton points      1568 / 718
+  Station scattering matrix                         2872 by 2872
+  Array physical / compressed unknowns              29160 / 11488
+  Station matrix builds / translated reuses          1 / 3
+
+Maximum relative errors over ten station test fields (eight plane waves
+and two dipoles), or four array test fields (two directions, two polarizations):
+
+  C4 matrix vs independently corrected matrix        5.43e-12
+  C4 correction application                         3.03e-12
+  Feed B / C compression                        3.18e-6 / 3.12e-6
+  Outer B / C compression                       2.06e-6 / 2.89e-6
+  Feed-interface exterior field                     1.08e-3
+  Hybrid feed/body exterior field                   3.51e-4
+  Outer-interface exterior field                    3.94e-3
+  Outer Green reconstruction of full reference       3.91e-3
+  Feed/body feedback omitted                        6.10e-2
+  Coupled four-station exterior field                4.49e-3
+  Inter-station coupling omitted                    2.96e-1
+  Full-array true NRCCIE residual                   1.23e-9
+
+The compressed array GMRES took 12 iterations for each of four right-hand
+sides; the independent physical reference took 9--10 iterations. One local
+four-thread run took 857.4 seconds, including all independent validation.
+The feed and outer interface stages took 286.2 and 367.2 seconds; array
+construction, solve, and validation took 169.8 seconds. These are measured
+prototype times, not scaling estimates or predicted symmetry speedups.
+
+The additional physics-only check is reproducible without constructing S:
+
+  refinement = check_toy_physics([8,10],[28,40]);
+
+For its two polarizations, increasing physical order from 8 to 10 changed
+the direct field by at most 1.79e-3 and reduced the Green reconstruction
+error from 1.48e-3 to 2.90e-4. Changing proxy order from 28 to 40 had little
+effect. This identifies physical discretization as the dominant error in
+this run; the 1e-5 ID tolerance is not the total field accuracy.
+The refinement data are saved in test/results/toy_physics_refinement.mat.
+
+To inspect the complete saved result without loading native BIE libraries:
+
+  r = load('test/results/toy_array_p8_q28_1em05.mat');
+  plot_toy_array_scattering(r,'on');
+
+This writes the sibling _summary.png and _summary.fig. The native solver
+run saved data and printed TOY_ARRAY_SCATTERING_PASS before the existing
+MATLAB native-library shutdown crash. A separate pure MATLAB process
+reloaded both interfaces, checked skeleton identities and ellipsoid
+orientation/volume, reapplied the saved array coefficients, and compared
+the dense station reference with the independent FMM reference (9.45e-12
+relative difference). That verification passed and exited normally.
