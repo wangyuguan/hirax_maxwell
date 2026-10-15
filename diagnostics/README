@@ -1,0 +1,17 @@
+Historical diagnostic source
+============================
+
+These scripts preserve earlier geometry, common/local partition, midplane
+symmetry, quadrature, and NRCCIE investigations. They are not the current
+test suite. Several depend on retired functions or saved MAT files and
+cannot be run against the current leaves module without adaptation.
+
+In particular, older scripts use build_leaf_geometry, the common/local
+quadrature helpers, apply_nrccie, leaf_midplane_permutation, or
+fourfold_expand_quad_corr. Those interfaces are intentionally not restored
+by this archive. Consult Git history when reproducing a historical study.
+Recorded results, plots, and logs remain local and are not included here.
+
+Current examples are leaves/test/nrccie_scattering_matrix_leaf.m and the
+functions under test/ellipsoid/. See leaves/README and
+test/ellipsoid/README_toy_rehearsal for their supported workflows.

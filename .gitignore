@@ -1,8 +1,13 @@
 /data/
-/diagnostics/
+/diagnostics/*
+!/diagnostics/*.m
+!/diagnostics/README
 /test/results/
 /leaves/test/results/
-/slurm_jobs/
+/slurm_jobs/*
+!/slurm_jobs/*.sh
+.DS_Store
+/test/id_result.mat
 *.asv
 *.log
 /notes/*.aux

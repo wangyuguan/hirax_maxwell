@@ -51,3 +51,9 @@ the coupled array against the full corrected NRCCIE. See
 test/ellipsoid/README_toy_rehearsal for definitions and measured errors.
 Ground clearance is preserved geometrically; ground reflection is not yet
 included. Generated data and figures are saved under test/results/.
+
+Additional source includes the root-level leaf-mesh illustrations and
+test_scattering_matrix_2d.m, an earlier 2D Helmholtz skeleton example.
+slurm_jobs/run_leaves_nrccie.sh submits the current leaves example using
+the Polar checkout paths specified in that script. diagnostics/ contains
+historical diagnostic source; its README describes the retired dependencies.
